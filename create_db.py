@@ -1,45 +1,41 @@
 # create_db.py
 import sqlite3
-
 DB_PATH = "garmin_like.db"
 
 DDL = """
--- activity_types
-CREATE TABLE activity_types (
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS activity_types (
   activity_type_id INTEGER PRIMARY KEY,
-  type_name TEXT NOT NULL -- e.g. "running","cycling","walking"
+  type_name TEXT NOT NULL
 );
 
--- genders
-CREATE TABLE genders (
+CREATE TABLE IF NOT EXISTS genders (
   gender_id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL -- "male","female","other","unknown"
+  name TEXT NOT NULL
 );
 
--- locations
-CREATE TABLE locations (
+CREATE TABLE IF NOT EXISTS locations (
   location_id INTEGER PRIMARY KEY,
   location_province TEXT NOT NULL
 );
 
--- users
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   user_id INTEGER PRIMARY KEY,
-  gender_id INTEGER, -- optional
+  gender_id INTEGER,
   user_name TEXT NOT NULL,
   user_phone TEXT,
   user_email TEXT UNIQUE,
-  user_status TEXT NOT NULL DEFAULT 'active', -- 'active','unverified','disabled'
-  registration_date TEXT NOT NULL, -- ISO datetime
+  user_status TEXT NOT NULL DEFAULT 'active',
+  registration_date TEXT NOT NULL,
   user_birthday TEXT,
-  user_role TEXT DEFAULT 'user', -- 'user','coach','admin'
+  user_role TEXT DEFAULT 'user',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT,
   FOREIGN KEY (gender_id) REFERENCES genders(gender_id)
 );
 
--- devices
-CREATE TABLE devices (
+CREATE TABLE IF NOT EXISTS devices (
   device_id INTEGER PRIMARY KEY,
   user_id INTEGER NOT NULL,
   device_model TEXT,
@@ -47,11 +43,10 @@ CREATE TABLE devices (
   FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
 
--- biometrics
-CREATE TABLE biometrics (
+CREATE TABLE IF NOT EXISTS biometrics (
   biometric_id INTEGER PRIMARY KEY,
   user_id INTEGER NOT NULL,
-  recorded_at TEXT NOT NULL, -- when this measurement was taken
+  recorded_at TEXT NOT NULL,
   weight_kg REAL,
   height_cm REAL,
   blood_type TEXT,
@@ -62,8 +57,7 @@ CREATE TABLE biometrics (
   FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
 
--- activity (main usage log)
-CREATE TABLE activities (
+CREATE TABLE IF NOT EXISTS activities (
   activity_id INTEGER PRIMARY KEY,
   user_id INTEGER NOT NULL,
   activity_type_id INTEGER NOT NULL,
@@ -71,10 +65,10 @@ CREATE TABLE activities (
   device_id INTEGER,
   start_time TEXT NOT NULL,
   end_time TEXT,
-  duration_sec INTEGER, -- derived or stored
+  duration_sec INTEGER,
   distance_km REAL,
   calories_kcal REAL,
-  status TEXT DEFAULT 'completed', -- 'completed','in_progress','cancelled'
+  status TEXT DEFAULT 'completed',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT,
   FOREIGN KEY (user_id) REFERENCES users(user_id),
@@ -83,12 +77,16 @@ CREATE TABLE activities (
   FOREIGN KEY (device_id) REFERENCES devices(device_id)
 );
 
--- missions
-CREATE TABLE missions (
+CREATE TABLE IF NOT EXISTS mission_difficulties (
+  mission_difficulty_id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS missions (
   mission_id INTEGER PRIMARY KEY,
   mission_name TEXT NOT NULL,
   activity_type_id INTEGER,
-  start_at TEXT, -- optional
+  start_at TEXT,
   end_at TEXT,
   mission_difficulty_id INTEGER,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -96,42 +94,33 @@ CREATE TABLE missions (
   FOREIGN KEY (mission_difficulty_id) REFERENCES mission_difficulties(mission_difficulty_id)
 );
 
--- mission_difficulties
-CREATE TABLE mission_difficulties (
-  mission_difficulty_id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL -- 'easy','medium','hard'
-);
-
--- achievements
-CREATE TABLE achievements (
+CREATE TABLE IF NOT EXISTS achievements (
   achievement_id INTEGER PRIMARY KEY,
   achievement_code TEXT NOT NULL,
   achievement_name TEXT NOT NULL,
-  mission_id INTEGER, -- optional: achieved via mission or self-contained
+  mission_id INTEGER,
   user_id INTEGER NOT NULL,
   achieved_at TEXT NOT NULL,
   FOREIGN KEY (mission_id) REFERENCES missions(mission_id),
   FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
 
--- goals
-CREATE TABLE goals (
+CREATE TABLE IF NOT EXISTS goals (
   goal_id INTEGER PRIMARY KEY,
   user_id INTEGER NOT NULL,
   activity_type_id INTEGER,
   goal_name TEXT NOT NULL,
-  target_value REAL NOT NULL, -- e.g., 100 (km) or 10000 (steps)
-  target_unit TEXT NOT NULL,   -- 'km','kcal','steps'
+  target_value REAL NOT NULL,
+  target_unit TEXT NOT NULL,
   start_at TEXT,
   end_at TEXT,
-  status TEXT DEFAULT 'active', -- 'active','completed','failed'
+  status TEXT DEFAULT 'active',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (user_id) REFERENCES users(user_id),
   FOREIGN KEY (activity_type_id) REFERENCES activity_types(activity_type_id)
 );
 
--- events
-CREATE TABLE events (
+CREATE TABLE IF NOT EXISTS events (
   event_id INTEGER PRIMARY KEY,
   event_name TEXT NOT NULL,
   event_description TEXT,
@@ -142,27 +131,24 @@ CREATE TABLE events (
   FOREIGN KEY (event_location_id) REFERENCES locations(location_id)
 );
 
--- communities
-CREATE TABLE communities (
+CREATE TABLE IF NOT EXISTS communities (
   community_id INTEGER PRIMARY KEY,
   community_name TEXT NOT NULL,
   description TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- communities_users (membership)
-CREATE TABLE communities_users (
+CREATE TABLE IF NOT EXISTS communities_users (
   community_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
   joined_at TEXT NOT NULL DEFAULT (datetime('now')),
-  role TEXT DEFAULT 'member', -- 'member','moderator','owner'
+  role TEXT DEFAULT 'member',
   PRIMARY KEY (community_id, user_id),
   FOREIGN KEY (community_id) REFERENCES communities(community_id),
   FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
 
--- communities_events (association)
-CREATE TABLE communities_events (
+CREATE TABLE IF NOT EXISTS communities_events (
   community_id INTEGER NOT NULL,
   event_id INTEGER NOT NULL,
   PRIMARY KEY (community_id, event_id),
@@ -170,12 +156,11 @@ CREATE TABLE communities_events (
   FOREIGN KEY (event_id) REFERENCES events(event_id)
 );
 
--- notification
-CREATE TABLE notification (
+CREATE TABLE IF NOT EXISTS notification (
   notification_id INTEGER PRIMARY KEY,
   user_id INTEGER NOT NULL,
-  device_id INTEGER, -- optional: push to device
-  notification_type TEXT NOT NULL, -- 'reminder','system','achievement'
+  device_id INTEGER,
+  notification_type TEXT NOT NULL,
   title TEXT,
   body TEXT,
   sent_at TEXT,
@@ -183,24 +168,28 @@ CREATE TABLE notification (
   FOREIGN KEY (device_id) REFERENCES devices(device_id)
 );
 
--- news
-CREATE TABLE news (
+CREATE TABLE IF NOT EXISTS news (
   news_id INTEGER PRIMARY KEY,
   news_subject TEXT NOT NULL,
   news_description TEXT,
   news_start_datetime TEXT,
   news_end_datetime TEXT
 );
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_activities_user_time ON activities(user_id, start_time);
+CREATE INDEX IF NOT EXISTS idx_activities_type_time ON activities(activity_type_id, start_time);
+CREATE INDEX IF NOT EXISTS idx_biometrics_user_time ON biometrics(user_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_goals_user ON goals(user_id);
 """
 
 def create_db():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    # execute DDL statements
     cur.executescript(DDL)
     conn.commit()
     conn.close()
-    print(f"Created database: {DB_PATH}")
+    print("Database created at", DB_PATH)
 
 if __name__ == "__main__":
     create_db()
