@@ -1,186 +1,197 @@
 # create_db.py
 import sqlite3
-DB_PATH = "garmin_like.db"
+DB_PATH = "garmin_like_gemini.db"
 
 DDL = """
 PRAGMA foreign_keys = ON;
+-- *** ข้อควรจำ: ในการใช้งาน DBeaver/SQLite ต้องรันคำสั่งนี้เพื่อเปิดใช้งาน Foreign Key Constraints ***
+-- PRAGMA foreign_keys = ON;
 
-CREATE TABLE IF NOT EXISTS activity_types (
-  activity_type_id INTEGER PRIMARY KEY,
-  type_name TEXT NOT NULL
+-- -----------------------------------------------------------
+-- ตาราง Lookup/Master (ต้องสร้างก่อน)
+-- -----------------------------------------------------------
+
+-- 1. ตาราง genders
+CREATE TABLE genders (
+    gender_id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS genders (
-  gender_id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL
+-- 2. (delete)ตาราง roles : ลบออกเพราะกำหนด admin ในอีกตารางแล้ว
+
+-- 3. ตาราง mission_difficulties
+CREATE TABLE mission_difficulties (
+    mission_difficulty_id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS locations (
-  location_id INTEGER PRIMARY KEY,
-  location_province TEXT NOT NULL
+-- 4. ตาราง activity_types
+CREATE TABLE activity_types (
+    activity_type_id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS users (
-  user_id INTEGER PRIMARY KEY,
-  gender_id INTEGER,
-  user_name TEXT NOT NULL,
-  user_phone TEXT,
-  user_email TEXT UNIQUE,
-  user_status TEXT NOT NULL DEFAULT 'active',
-  registration_date TEXT NOT NULL,
-  user_birthday TEXT,
-  user_role TEXT DEFAULT 'user',
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT,
-  FOREIGN KEY (gender_id) REFERENCES genders(gender_id)
+-- 5. ตาราง locations
+CREATE TABLE locations (
+    location_id INTEGER PRIMARY KEY,
+    city TEXT,
+    location_latitude DECIMAL,
+    location_longitude DECIMAL
 );
 
-CREATE TABLE IF NOT EXISTS devices (
-  device_id INTEGER PRIMARY KEY,
-  user_id INTEGER NOT NULL,
-  device_model TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (user_id) REFERENCES users(user_id)
+-- -----------------------------------------------------------
+-- ตารางหลักและธุรกรรม
+-- -----------------------------------------------------------
+
+-- 6. ตาราง users
+CREATE TABLE users (
+    user_id INTEGER PRIMARY KEY,
+    gender_id INTEGER NOT NULL REFERENCES genders(gender_id),
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    username TEXT UNIQUE,
+    email TEXT NOT NULL UNIQUE,
+    phone_number TEXT,
+    user_verify BOOLEAN DEFAULT 0, -- 0=FALSE, 1=TRUE
+    registration_date TEXT NOT NULL, -- ISO8601 Date
+    user_birthday TEXT, -- ISO8601 Date
+    is_active BOOLEAN DEFAULT 1 -- 0=FALSE, 1=TRUE
 );
 
-CREATE TABLE IF NOT EXISTS biometrics (
-  biometric_id INTEGER PRIMARY KEY,
-  user_id INTEGER NOT NULL,
-  recorded_at TEXT NOT NULL,
-  weight_kg REAL,
-  height_cm REAL,
-  blood_type TEXT,
-  bp_systolic INTEGER,
-  bp_diastolic INTEGER,
-  heart_rate_avg INTEGER,
-  sleep_score INTEGER,
-  FOREIGN KEY (user_id) REFERENCES users(user_id)
+-- 7. ตาราง communities
+CREATE TABLE communities (
+    community_id INTEGER PRIMARY KEY,
+    location_id INTEGER REFERENCES locations(location_id),
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    is_public BOOLEAN DEFAULT 1,
+    created_at TEXT NOT NULL -- ISO8601 Datetime
 );
 
-CREATE TABLE IF NOT EXISTS activities (
-  activity_id INTEGER PRIMARY KEY,
-  user_id INTEGER NOT NULL,
-  activity_type_id INTEGER NOT NULL,
-  location_id INTEGER,
-  device_id INTEGER,
-  start_time TEXT NOT NULL,
-  end_time TEXT,
-  duration_sec INTEGER,
-  distance_km REAL,
-  calories_kcal REAL,
-  status TEXT DEFAULT 'completed',
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT,
-  FOREIGN KEY (user_id) REFERENCES users(user_id),
-  FOREIGN KEY (activity_type_id) REFERENCES activity_types(activity_type_id),
-  FOREIGN KEY (location_id) REFERENCES locations(location_id),
-  FOREIGN KEY (device_id) REFERENCES devices(device_id)
+-- 8. ตาราง communities_users (ตารางเชื่อมโยงสมาชิกในชุมชน)
+CREATE TABLE communities_users (
+    community_id INTEGER NOT NULL REFERENCES communities(community_id),
+    user_id INTEGER NOT NULL REFERENCES users(user_id),
+    joined_at TEXT NOT NULL, -- ISO8601 Datetime
+    is_admin BOOLEAN DEFAULT 0,
+    PRIMARY KEY (community_id, user_id)
 );
 
-CREATE TABLE IF NOT EXISTS mission_difficulties (
-  mission_difficulty_id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL
+-- 9. ตาราง events
+CREATE TABLE events (
+    event_id INTEGER PRIMARY KEY,
+    community_id INTEGER NOT NULL REFERENCES communities(community_id),
+    location_id INTEGER REFERENCES locations(location_id), -- อนุญาตให้เป็น NULL สำหรับ Virtual Event
+    event_name TEXT NOT NULL,
+    event_descrip TEXT,
+    start_datetime TEXT NOT NULL, -- ISO8601 Datetime
+    end_datetime TEXT -- ISO8601 Datetime
 );
 
-CREATE TABLE IF NOT EXISTS missions (
-  mission_id INTEGER PRIMARY KEY,
-  mission_name TEXT NOT NULL,
-  activity_type_id INTEGER,
-  start_at TEXT,
-  end_at TEXT,
-  mission_difficulty_id INTEGER,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (activity_type_id) REFERENCES activity_types(activity_type_id),
-  FOREIGN KEY (mission_difficulty_id) REFERENCES mission_difficulties(mission_difficulty_id)
+-- (new). ตาราง event_participants
+CREATE TABLE event_participants (
+    event_id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id),
+    location_id INTEGER REFERENCES locations(location_id), -- อนุญาตให้เป็น NULL สำหรับ Virtual Event
+    status TEXT NOT NULL,
+    checkin_datetime TEXT NOT NULL -- ISO8601 Datetime
 );
 
-CREATE TABLE IF NOT EXISTS achievements (
-  achievement_id INTEGER PRIMARY KEY,
-  achievement_code TEXT NOT NULL,
-  achievement_name TEXT NOT NULL,
-  mission_id INTEGER,
-  user_id INTEGER NOT NULL,
-  achieved_at TEXT NOT NULL,
-  FOREIGN KEY (mission_id) REFERENCES missions(mission_id),
-  FOREIGN KEY (user_id) REFERENCES users(user_id)
+-- 10. ตาราง activities (บันทึกกิจกรรมออกกำลังกาย)
+CREATE TABLE activities (
+    activity_id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id),
+    activity_type_id INTEGER NOT NULL REFERENCES activity_types(activity_type_id),
+    location_id INTEGER REFERENCES locations(location_id),
+    device_id INTEGER REFERENCES devices(device_id),
+    start_datetime TEXT NOT NULL, -- ISO8601 Datetime
+    end_datetime TEXT NOT NULL, -- ISO8601 Datetime
+    distance_km REAL, -- ใช้ REAL สำหรับทศนิยม
+    calories_kcal INTEGER,
+    is_verified BOOLEAN DEFAULT 0,
+    created_at TEXT NOT NULL, -- ISO8601 Datetime
+    updated_at TEXT -- ISO8601 Datetime
 );
 
-CREATE TABLE IF NOT EXISTS goals (
-  goal_id INTEGER PRIMARY KEY,
-  user_id INTEGER NOT NULL,
-  activity_type_id INTEGER,
-  goal_name TEXT NOT NULL,
-  target_value REAL NOT NULL,
-  target_unit TEXT NOT NULL,
-  start_at TEXT,
-  end_at TEXT,
-  status TEXT DEFAULT 'active',
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (user_id) REFERENCES users(user_id),
-  FOREIGN KEY (activity_type_id) REFERENCES activity_types(activity_type_id)
+-- 11. ตาราง goals
+CREATE TABLE goals (
+    goal_id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id),
+    activity_type_id INTEGER REFERENCES activity_types(activity_type_id),
+    goal_name TEXT NOT NULL,
+    target_amount REAL NOT NULL,
+    target_metric TEXT NOT NULL,
+    start_dt TEXT NOT NULL, -- ISO8601 Date
+    end_dt TEXT, -- ISO8601 Date
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL -- ISO8601 Datetime
 );
 
-CREATE TABLE IF NOT EXISTS events (
-  event_id INTEGER PRIMARY KEY,
-  event_name TEXT NOT NULL,
-  event_description TEXT,
-  event_start_datetime TEXT,
-  event_end_datetime TEXT,
-  event_location_id INTEGER,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (event_location_id) REFERENCES locations(location_id)
+-- 12. ตาราง biometrics
+CREATE TABLE biometrics (
+    biometric_id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id),
+    weight REAL,
+    weight_unit TEXT,
+    height REAL,
+    height_unit TEXT,
+    blood_pressure_avg TEXT,
+    heart_rate_avg INTEGER,
+    sleep_score INTEGER,
+    measured_at TEXT NOT NULL -- ISO8601 Datetime
 );
 
-CREATE TABLE IF NOT EXISTS communities (
-  community_id INTEGER PRIMARY KEY,
-  community_name TEXT NOT NULL,
-  description TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+-- 13. ตาราง devices
+CREATE TABLE devices (
+    device_id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id),
+    device_model TEXT,
+    created_at TEXT NOT NULL -- ISO8601 Datetime
 );
 
-CREATE TABLE IF NOT EXISTS communities_users (
-  community_id INTEGER NOT NULL,
-  user_id INTEGER NOT NULL,
-  joined_at TEXT NOT NULL DEFAULT (datetime('now')),
-  role TEXT DEFAULT 'member',
-  PRIMARY KEY (community_id, user_id),
-  FOREIGN KEY (community_id) REFERENCES communities(community_id),
-  FOREIGN KEY (user_id) REFERENCES users(user_id)
+-- 14. ตาราง notification
+CREATE TABLE notification (
+    notification_id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id),
+    device_id INTEGER REFERENCES devices(device_id),
+    notification_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT,
+    created_at TEXT NOT NULL, -- ISO8601 Datetime
+    is_read BOOLEAN DEFAULT 0 -- 0=FALSE, 1=TRUE
+
 );
 
-CREATE TABLE IF NOT EXISTS communities_events (
-  community_id INTEGER NOT NULL,
-  event_id INTEGER NOT NULL,
-  PRIMARY KEY (community_id, event_id),
-  FOREIGN KEY (community_id) REFERENCES communities(community_id),
-  FOREIGN KEY (event_id) REFERENCES events(event_id)
+-- 15. ตาราง news
+CREATE TABLE news (
+    news_id INTEGER PRIMARY KEY,
+    news_subject TEXT NOT NULL,
+    news_descrip TEXT,
+    news_start_datetime TEXT NOT NULL, -- ISO8601 Datetime
+    news_end_datetime TEXT, -- ISO8601 Datetime
+    is_read BOOLEAN DEFAULT 0, -- 0=FALSE, 1=TRUE
+    created_by_user_id INTEGER NOT NULL REFERENCES users(user_id)
 );
 
-CREATE TABLE IF NOT EXISTS notification (
-  notification_id INTEGER PRIMARY KEY,
-  user_id INTEGER NOT NULL,
-  device_id INTEGER,
-  notification_type TEXT NOT NULL,
-  title TEXT,
-  body TEXT,
-  sent_at TEXT,
-  FOREIGN KEY (user_id) REFERENCES users(user_id),
-  FOREIGN KEY (device_id) REFERENCES devices(device_id)
+-- 16. ตาราง achievements
+CREATE TABLE achievements (
+    achievement_id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id),
+    a_code TEXT NOT NULL UNIQUE,
+    a_name TEXT NOT NULL,
+    a_descrip TEXT,
+    earned_at TEXT NOT NULL -- ISO8601 Datetime
 );
 
-CREATE TABLE IF NOT EXISTS news (
-  news_id INTEGER PRIMARY KEY,
-  news_subject TEXT NOT NULL,
-  news_description TEXT,
-  news_start_datetime TEXT,
-  news_end_datetime TEXT
+-- 17. ตาราง missions
+CREATE TABLE missions (
+    mission_id INTEGER PRIMARY KEY,
+    mission_difficulty_id INTEGER NOT NULL REFERENCES mission_difficulties(mission_difficulty_id),
+    activity_type_id INTEGER NOT NULL REFERENCES activity_types(activity_type_id),
+    name TEXT NOT NULL,
+    description TEXT,
+    reward_points INTEGER DEFAULT 0
 );
-
--- Indexes
-CREATE INDEX IF NOT EXISTS idx_activities_user_time ON activities(user_id, start_time);
-CREATE INDEX IF NOT EXISTS idx_activities_type_time ON activities(activity_type_id, start_time);
-CREATE INDEX IF NOT EXISTS idx_biometrics_user_time ON biometrics(user_id, recorded_at);
-CREATE INDEX IF NOT EXISTS idx_goals_user ON goals(user_id);
 """
 
 def create_db():
