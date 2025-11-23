@@ -109,7 +109,7 @@ CREATE TABLE activities (
     user_id INTEGER NOT NULL REFERENCES users(user_id),
     activity_type_id INTEGER NOT NULL REFERENCES activity_types(activity_type_id),
     location_id INTEGER REFERENCES locations(location_id),
-    device_id INTEGER REFERENCES devices(device_id),
+    device_id INTEGER NOT NULL REFERENCES devices(device_id),
     start_datetime TEXT NOT NULL, -- ISO8601 Datetime
     end_datetime TEXT NOT NULL, -- ISO8601 Datetime
     distance_km REAL, -- ใช้ REAL สำหรับทศนิยม

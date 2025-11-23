@@ -12,7 +12,7 @@ from faker import Faker
 
 # Configuration: change counts for larger/smaller datasets
 N_USERS = 500            # number of users
-N_LOCATIONS = 50         # locations
+N_LOCATIONS = 100         # locations
 N_ACTIVITIES = 3000      # activity records
 N_COMMUNITIES = 20
 N_EVENTS = 80
@@ -24,6 +24,18 @@ N_NEWS = 30
 N_ACHIEVEMENTS = 600
 N_MISSIONS = 25
 DB_PATH = "garmin_clone.db"
+# เพิ่มในส่วน Configuration ด้านบน (พร้อมกับ N_USERS, N_ACTIVITIES, ฯลฯ)
+DAYS_HISTORY = 30        # For biometrics: collect one record per user per day for this many days
+
+# <<< ต้องเพิ่มส่วนนี้ที่นี่ >>>
+# List of tables to clear to ensure the script is idempotent (can be re-run)
+TABLES_TO_CLEAR = [
+    'genders', 'mission_difficulties', 'activity_types', 'locations', 'users',
+    'devices', 'activities', 'communities', 'communities_users', 'events',
+    'event_participants', 'goals', 'biometrics', 'notification', 'news',
+    'achievements', 'missions'
+]
+# <<< จบส่วนที่ต้องเพิ่ม >>>
 
 fake = Faker()
 Faker.seed(1)
@@ -44,6 +56,21 @@ def main():
     # Ensure foreign_keys on
     cur.execute("PRAGMA foreign_keys = ON;")
 
+    # 0) NEW: Clear data from all tables to allow re-running the script
+    print("Clearing existing mock data...")
+    
+    # <<< แก้ไขตรงนี้: ใช้ .reverse() หรือ reversed() เพื่อลบในลำดับย้อนกลับ >>>
+    # เราจะใช้ reversed() เพื่อลบตารางลูกก่อนตารางแม่
+    for table in reversed(TABLES_TO_CLEAR):
+        try:
+            # ใช้ 'DELETE FROM' เพื่อล้างข้อมูลในตาราง
+            cur.execute(f"DELETE FROM {table}")
+        except sqlite3.OperationalError:
+            pass # Ignore if a table does not exist yet
+
+    conn.commit()
+    print("Existing data cleared successfully.")
+
     # 1) Fill lookup tables: genders, mission_difficulties, activity_types
     genders = ['male', 'female', 'non-binary', 'prefer not to say']
     for i, g in enumerate(genders, start=1):
@@ -58,11 +85,99 @@ def main():
         cur.execute("INSERT INTO activity_types(activity_type_id,name) VALUES(?,?)", (i,a))
 
     # 2) Locations
-    cities = ['Bangkok','Chiang Mai','Phuket','Singapore','Jakarta','Kuala Lumpur','London','New York','Sydney','Tokyo']
+    # Data for Thai Provinces (Province Name, Latitude, Longitude) for realistic location generation
+# (Complete list of 77 provinces)
+    THAI_LOCATIONS = [
+    ("Bangkok", 13.7563, 100.5018), 
+    ("Amnat Charoen", 15.8647, 104.6293), 
+    ("Ang Thong", 14.5888, 100.3804), 
+    ("Bueng Kan", 18.3687, 103.6508), 
+    ("Buri Ram", 15.0062, 103.1091), 
+    ("Chachoengsao", 13.6888, 101.0716), 
+    ("Chai Nat", 15.1963, 100.1257), 
+    ("Chaiyaphum", 15.8166, 102.0493), 
+    ("Chanthaburi", 12.6074, 102.1158), 
+    ("Chiang Mai", 18.7061, 98.9950), 
+    ("Chiang Rai", 19.9079, 99.8325), 
+    ("Chonburi", 13.3602, 100.9840), 
+    ("Chumphon", 10.4623, 99.1557), 
+    ("Kalasin", 16.4485, 103.5262), 
+    ("Kamphaeng Phet", 16.4674, 99.5255), 
+    ("Kanchanaburi", 14.0076, 99.5165), 
+    ("Khon Kaen", 16.4444, 102.8354), 
+    ("Krabi", 8.0833, 98.9213), 
+    ("Lampang", 18.2936, 99.5085), 
+    ("Lamphun", 18.5861, 99.0061), 
+    ("Loei", 17.4725, 101.8398), 
+    ("Lopburi", 14.7997, 100.6720), 
+    ("Mae Hong Son", 19.3021, 97.9686), 
+    ("Maha Sarakham", 16.1950, 103.2423), 
+    ("Mukdahan", 16.5451, 104.6857), 
+    ("Nakhon Nayok", 14.2057, 101.2183), 
+    ("Nakhon Pathom", 13.8239, 100.0784), 
+    ("Nakhon Phanom", 17.4086, 104.7831), 
+    ("Nakhon Ratchasima", 14.9783, 102.0992), 
+    ("Nakhon Sawan", 15.6946, 100.1197), 
+    ("Nakhon Si Thammarat", 8.4208, 99.9692), 
+    ("Nan", 18.7779, 100.7712), 
+    ("Narathiwat", 6.4279, 101.8267), 
+    ("Nong Bua Lamphu", 17.2036, 102.4042), 
+    ("Nong Khai", 17.8761, 102.7562), 
+    ("Nonthaburi", 13.8856, 100.4682), 
+    ("Pathum Thani", 14.0205, 100.5244), 
+    ("Pattani", 6.8661, 101.2290), 
+    ("Phang Nga", 8.4485, 98.5297), 
+    ("Phatthalung", 7.6186, 100.0763), 
+    ("Phetchabun", 16.4257, 101.0772), 
+    ("Phetchaburi", 13.1118, 99.9329), 
+    ("Phichit", 16.2699, 100.3541), 
+    ("Phitsanulok", 16.8251, 100.2646), 
+    ("Phrae", 18.1469, 100.1472), 
+    ("Phra Nakhon Si Ayutthaya", 14.3508, 100.5684), 
+    ("Phuket", 7.8804, 98.3923), 
+    ("Prachinburi", 14.0494, 101.3854), 
+    ("Prachuap Khiri Khan", 11.8159, 99.7997), 
+    ("Ranong", 9.9602, 98.6366), 
+    ("Ratchaburi", 13.5358, 99.8174), 
+    ("Rayong", 12.6766, 101.2778), 
+    ("Roi Et", 16.0506, 103.6542), 
+    ("Sa Kaeo", 13.8441, 102.5020), 
+    ("Sakon Nakhon", 17.1558, 104.1481), 
+    ("Samut Prakan", 13.5997, 100.5985), 
+    ("Samut Sakhon", 13.5583, 100.2783), 
+    ("Samut Songkhram", 14.0531, 99.9536), 
+    ("Saraburi", 14.5165, 100.9168), 
+    ("Satun", 6.6111, 99.9829), 
+    ("Singburi", 14.8872, 100.3957), 
+    ("Sisaket", 15.1189, 104.1481), 
+    ("Songkhla", 7.1896, 100.5986), 
+    ("Sukhothai", 17.0094, 99.7842), 
+    ("Suphan Buri", 14.4754, 100.0818), 
+    ("Surat Thani", 9.1418, 99.3299), 
+    ("Surin", 14.8824, 103.4984), 
+    ("Tak", 16.8770, 99.1232), 
+    ("Trang", 7.5501, 99.6105), 
+    ("Trat", 12.2392, 102.5061), 
+    ("Ubon Ratchathani", 15.2285, 104.8576), 
+    ("Udon Thani", 17.3942, 102.7845), 
+    ("Uthai Thani", 15.3789, 100.0381), 
+    ("Uttaradit", 17.6256, 100.0886), 
+    ("Yala", 6.5510, 101.2721), 
+    ("Yasothon", 15.8118, 104.1542),
+    ("Phayao", 19.1918, 99.8973) 
+    ]
+    # NEW LOGIC: Use realistic Thai province coordinates with small jitter
     for loc_id in range(1, N_LOCATIONS+1):
-        city = random.choice(cities)
-        lat = round(random.uniform(-37.0, 37.0), 6)
-        lon = round(random.uniform(-122.0, 151.0), 6)
+        # 1. สุ่มเลือกข้อมูลจังหวัดจาก THAI_LOCATIONS
+        province_data = random.choice(THAI_LOCATIONS)
+        city = province_data[0] # <<--- ชื่อภาษาอังกฤษจะถูกดึงมาที่นี่
+        base_lat = province_data[1] 
+        base_lon = province_data[2]
+        
+        # 2. เพิ่มค่า Jitter (การสั่น) เล็กน้อยเพื่อจำลองตำแหน่งเฉพาะในจังหวัดนั้น
+        lat = round(base_lat + random.uniform(-0.1, 0.1), 6) 
+        lon = round(base_lon + random.uniform(-0.1, 0.1), 6)
+        
         cur.execute("INSERT INTO locations(location_id,city,location_latitude,location_longitude) VALUES(?,?,?,?)",
                     (loc_id, city, lat, lon))
 
@@ -95,23 +210,44 @@ def main():
                     (device_id, user_id, model, created_at))
         device_id += 1
 
-    # 5) Activities
+   # 5) Activities
     activity_id = 1
+    
+    # ใช้นโยบายการกำหนดค่าขอบเขตสูงสุดที่ปลอดภัยที่สุด
+    # max_device_id คือ ID อุปกรณ์ที่มีอยู่จริงสูงสุด (N_DEVICES)
+    # เราใช้ max(1, device_id - 1) เพื่อรับประกันว่าขอบเขตบนอย่างน้อยคือ 1 
+    # แม้ในกรณีที่ N_DEVICES ถูกตั้งเป็น 0
+    max_device_id_to_link = max(1, device_id - 1) 
+    
     for _ in range(N_ACTIVITIES):
         user_id = random.choice(user_ids)
         activity_type_id = random.randint(1, len(activity_types))
         loc_id = random.randint(1, N_LOCATIONS)
-        # assign device sometimes
-        device_ref = random.randint(1, device_id-1) if random.random() > 0.3 and device_id > 1 else None
-        # realistic durations: 20 - 180 minutes
+        
+        # NEW: กำหนด device_id เสมอ (ไม่มี NULL)
+        # สุ่ม ID ระหว่าง 1 ถึง max_device_id_to_link
+        device_ref = random.randint(1, max_device_id_to_link)
+
+        # realistic durations: 10 - 180 minutes
         duration_min = random.randint(10, 180)
         end_dt = datetime.utcnow() - timedelta(days=random.randint(0, 720), minutes=random.randint(0, 1440))
         start_dt = end_dt - timedelta(minutes=duration_min)
-        distance = round(max(0.1, random.gauss(5 if activity_type_id == 1 else 10, 5)), 2)
+        
+        # distance: สุ่มโดยอิงจากประเภทกิจกรรม
+        if activity_type_id == 1:
+             avg_dist = 5
+        elif activity_type_id == 2:
+             avg_dist = 15
+        else:
+             avg_dist = 2
+             
+        distance = round(max(0.1, random.gauss(avg_dist, 5)), 2)
         calories = int(max(50, distance * random.uniform(50, 80)))
+        
         is_verified = 1 if random.random() > 0.3 else 0
         created_at = (start_dt + timedelta(minutes=1)).isoformat()
         updated_at = (start_dt + timedelta(minutes=2)).isoformat()
+        
         cur.execute("""INSERT INTO activities(activity_id, user_id, activity_type_id, location_id, device_id, start_datetime, end_datetime, distance_km, calories_kcal, is_verified, created_at, updated_at)
                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (activity_id, user_id, activity_type_id, loc_id, device_ref, start_dt.isoformat(), end_dt.isoformat(), distance, calories, is_verified, created_at, updated_at))
@@ -173,18 +309,57 @@ def main():
                        VALUES(?,?,?,?,?,?,?,?,?,?)""",
                     (gid, user_id, activity_type_id, goal_name, target_amount, target_metric, start_dt, end_dt, status, created_at))
 
+    # # 9) Biometrics
+    # for bid in range(1, N_BIOMETRICS+1):
+    #     user_id = random.choice(user_ids)
+    #     weight = round(random.uniform(50, 95), 1)
+    #     height = round(random.uniform(150, 195), 1)
+    #     bp = f"{random.randint(100,130)}/{random.randint(60,85)}"
+    #     hr = random.randint(50, 100)
+    #     sleep_score = random.randint(40, 100)
+    #     for date in date_ranges:
+    #         measured_at = date
+    #     cur.execute("""INSERT INTO biometrics(biometric_id, user_id, weight, weight_unit, height, height_unit, blood_pressure_avg, heart_rate_avg, sleep_score, measured_at)
+    #                    VALUES(?,?,?,?,?,?,?,?,?,?)""",
+    #                 (bid, user_id, weight, 'kg', height, 'cm', bp, hr, sleep_score, measured_at))
+
     # 9) Biometrics
-    for bid in range(1, N_BIOMETRICS+1):
-        user_id = random.choice(user_ids)
-        weight = round(random.uniform(50, 95), 1)
-        height = round(random.uniform(150, 195), 1)
-        bp = f"{random.randint(100,130)}/{random.randint(60,85)}"
-        hr = random.randint(50, 100)
-        sleep_score = random.randint(40, 100)
-        measured_at = rand_between_dates(700, 0)
-        cur.execute("""INSERT INTO biometrics(biometric_id, user_id, weight, weight_unit, height, height_unit, blood_pressure_avg, heart_rate_avg, sleep_score, measured_at)
-                       VALUES(?,?,?,?,?,?,?,?,?,?)""",
-                    (bid, user_id, weight, 'kg', height, 'cm', bp, hr, sleep_score, measured_at))
+    biometric_id = 1
+    today = datetime.utcnow().date() 
+
+    for user_id in user_ids:
+        # 1. กำหนดส่วนสูง (Height) และน้ำหนักพื้นฐาน (Base Weight) เพียงครั้งเดียวต่อผู้ใช้
+        # ส่วนสูง: ควรคงที่ตลอดช่วงเวลา
+        user_height = round(random.uniform(150, 195), 1) # ส่วนสูง (cm)
+        # น้ำหนักพื้นฐาน: ใช้เป็นจุดเริ่มต้นสำหรับการผันผวน
+        base_weight = round(random.uniform(55, 90), 1) 
+
+        # วนลูปตามจำนวนวันย้อนหลังที่ต้องการ
+        for day_offset in range(DAYS_HISTORY):
+            # 2. คำนวณวันที่และเวลาที่วัด
+            measured_date = today - timedelta(days=day_offset)
+            measured_at_dt = measured_date + timedelta(hours=random.randint(6, 22), minutes=random.randint(0, 59))
+            measured_at = measured_at_dt.isoformat()
+
+            # 3. สร้างข้อมูล Biometric
+            # น้ำหนัก: ผันผวนเล็กน้อยจาก Base Weight เพื่อความสมจริง ( +/- 1.5 kg)
+            weight_fluctuation = random.uniform(-1.5, 1.5) 
+            weight = round(max(40.0, base_weight + weight_fluctuation), 1)
+            
+            height = user_height # ใช้ค่าที่กำหนดไว้ในลูปผู้ใช้ (คงที่)
+            
+            bp = f"{random.randint(100,130)}/{random.randint(60,85)}"
+            hr = random.randint(50, 100)
+            sleep_score = random.randint(40, 100)
+            
+            # 4. INSERT
+            cur.execute("""INSERT INTO biometrics(biometric_id, user_id, weight, weight_unit, height, height_unit, blood_pressure_avg, heart_rate_avg, sleep_score, measured_at)
+                           VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                        (biometric_id, user_id, weight, 'kg', height, 'cm', bp, hr, sleep_score, measured_at))
+            
+            biometric_id += 1
+
+    # ... (โค้ดส่วน 10-13 และส่วนท้ายยังคงเดิม) ...
 
     # 10) Notifications
     for nid in range(1, N_NOTIFICATIONS+1):
