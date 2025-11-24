@@ -13,19 +13,19 @@ from faker import Faker
 # Configuration: change counts for larger/smaller datasets
 N_USERS = 500            # number of users
 N_LOCATIONS = 77         # locations
-N_ACTIVITIES = 50000      # activity records
-N_COMMUNITIES = 20
-N_EVENTS = 80
-N_GOALS = 750
-N_BIOMETRICS = 15000
-N_DEVICES = 600
-N_NOTIFICATIONS = 15000
-N_NEWS = 30
-N_ACHIEVEMENTS = 2500
-N_MISSIONS = 25
+N_ACTIVITIES = 100000    # REVISED: activity records (50000 -> 100000)
+N_COMMUNITIES = 50       # REVISED: (20 -> 50)
+N_EVENTS = 250           # REVISED: (80 -> 250)
+N_GOALS = 2500           # REVISED: (750 -> 2500)
+N_BIOMETRICS = 15000     # (Keep)
+N_DEVICES = 600          # (Keep)
+N_NOTIFICATIONS = 15000  # (Keep)
+N_NEWS = 100             # REVISED: (30 -> 100)
+N_ACHIEVEMENTS = 5000    # REVISED: (2500 -> 5000)
+N_MISSIONS = 50          # REVISED: (25 -> 50)
 DB_PATH = "garmin_clone.db"
 # เพิ่มในส่วน Configuration ด้านบน (พร้อมกับ N_USERS, N_ACTIVITIES, ฯลฯ)
-DAYS_HISTORY = 30        # For biometrics: collect one record per user per day for this many days
+DAYS_HISTORY = 30        # For biometrics: collect one record per user per day for this many days (Keep)
 
 # List of tables to clear to ensure the script is idempotent (can be re-run)
 TABLES_TO_CLEAR = [
