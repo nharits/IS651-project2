@@ -247,13 +247,48 @@ def main():
         user_ids.append(uid)
 
     # 4) Devices (some users have devices)
-    device_models = ['Garmin Forerunner 945','Garmin Vivoactive 4','GenericPhone','Garmin Fenix 6','Other']
+    
+    # NEW: รุ่นนาฬิกา Garmin ที่เป็นปัจจุบันและได้รับความนิยมในตลาด (พ.ย. 2025)
+    device_models = [
+        # Forerunner Series (Running/Triathlon)
+        'Garmin Forerunner 970',
+        'Garmin Forerunner 965',
+        'Garmin Forerunner 570',
+        'Garmin Forerunner 265',
+        'Garmin Forerunner 165',
+        'Garmin Forerunner 55',      # Entry-level running
+        
+        # Fenix/Epix Series (Premium Multisport/Outdoor)
+        'Garmin Fenix 8 Pro',
+        'Garmin Fenix 7 Pro',
+        'Garmin Epix Gen 2',
+        'Garmin Epix Pro (Gen 2)',
+        'Garmin Enduro 3',           # Ultraperformance
+        'Garmin tactix 8',           # Tactical
+        
+        # Venu/Vivoactive Series (Lifestyle/Health/Smartwatch)
+        'Garmin Venu 4',
+        'Garmin Venu X1',
+        'Garmin Venu 3',
+        'Garmin Vivoactive 6',
+        'Garmin Vivoactive 5',
+        'Garmin Lily 2',             # Fashion/Small form factor
+        
+        # Instinct Series (Rugged/Outdoor)
+        'Garmin Instinct 3',
+        'Garmin Instinct 2X Solar',
+        'Garmin Instinct Crossover'
+    ]
+    
     device_id = 1
+    
     for _ in range(N_DEVICES):
         user_id = random.choice(user_ids)
         model = random.choice(device_models)
-        # REVISED: ใช้ rand_realistic_datetime
+        
+        # ใช้ created_at ที่ถูกแก้ไขให้สมจริงแล้ว (6 AM - 11 PM)
         created_at = rand_realistic_datetime(800, 0, start_hour=6, end_hour=23)
+        
         cur.execute("INSERT INTO devices(device_id, user_id, device_model, created_at) VALUES(?,?,?,?)",
                     (device_id, user_id, model, created_at))
         device_id += 1
