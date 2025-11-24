@@ -12,16 +12,16 @@ from faker import Faker
 
 # Configuration: change counts for larger/smaller datasets
 N_USERS = 500            # number of users
-N_LOCATIONS = 100         # locations
-N_ACTIVITIES = 3000      # activity records
+N_LOCATIONS = 77         # locations
+N_ACTIVITIES = 50000      # activity records
 N_COMMUNITIES = 20
 N_EVENTS = 80
-N_GOALS = 300
-N_BIOMETRICS = 600
-N_DEVICES = 350
-N_NOTIFICATIONS = 1200
+N_GOALS = 750
+N_BIOMETRICS = 15000
+N_DEVICES = 600
+N_NOTIFICATIONS = 15000
 N_NEWS = 30
-N_ACHIEVEMENTS = 600
+N_ACHIEVEMENTS = 2500
 N_MISSIONS = 25
 DB_PATH = "garmin_clone.db"
 # เพิ่มในส่วน Configuration ด้านบน (พร้อมกับ N_USERS, N_ACTIVITIES, ฯลฯ)
@@ -166,20 +166,29 @@ def main():
     ("Yasothon", 15.8118, 104.1542),
     ("Phayao", 19.1918, 99.8973) 
     ]
-    # NEW LOGIC: Use realistic Thai province coordinates with small jitter
-    for loc_id in range(1, N_LOCATIONS+1):
-        # 1. สุ่มเลือกข้อมูลจังหวัดจาก THAI_LOCATIONS
-        province_data = random.choice(THAI_LOCATIONS)
-        city = province_data[0] # <<--- ชื่อภาษาอังกฤษจะถูกดึงมาที่นี่
+    # NEW LOGIC: Use all 77 provinces of THAI_LOCATIONS exactly once.
+    loc_id = 1
+    # วนลูปตามรายการจังหวัดโดยตรง
+    for province_data in THAI_LOCATIONS:
+        
+        city = province_data[0] # ชื่อจังหวัด (เช่น "Bangkok")
         base_lat = province_data[1] 
         base_lon = province_data[2]
         
-        # 2. เพิ่มค่า Jitter (การสั่น) เล็กน้อยเพื่อจำลองตำแหน่งเฉพาะในจังหวัดนั้น
+        # 1. เพิ่มค่า Jitter (การสั่น) เล็กน้อยเพื่อจำลองตำแหน่งเฉพาะในจังหวัดนั้น
+        # Jitter +/- 0.1 องศา ประมาณ +/- 11 กิโลเมตร
         lat = round(base_lat + random.uniform(-0.1, 0.1), 6) 
         lon = round(base_lon + random.uniform(-0.1, 0.1), 6)
         
+        # 2. INSERT
         cur.execute("INSERT INTO locations(location_id,city,location_latitude,location_longitude) VALUES(?,?,?,?)",
                     (loc_id, city, lat, lon))
+        
+        loc_id += 1 # เพิ่ม Location ID
+        
+        # ถ้า N_LOCATIONS ถูกตั้งไว้น้อยกว่า 77 หรือต้องการหยุดที่จำนวนที่กำหนด
+        if loc_id > N_LOCATIONS:
+            break
 
     # 3) Users
     user_ids = []
@@ -308,20 +317,6 @@ def main():
         cur.execute("""INSERT INTO goals(goal_id, user_id, activity_type_id, goal_name, target_amount, target_metric, start_dt, end_dt, status, created_at)
                        VALUES(?,?,?,?,?,?,?,?,?,?)""",
                     (gid, user_id, activity_type_id, goal_name, target_amount, target_metric, start_dt, end_dt, status, created_at))
-
-    # # 9) Biometrics
-    # for bid in range(1, N_BIOMETRICS+1):
-    #     user_id = random.choice(user_ids)
-    #     weight = round(random.uniform(50, 95), 1)
-    #     height = round(random.uniform(150, 195), 1)
-    #     bp = f"{random.randint(100,130)}/{random.randint(60,85)}"
-    #     hr = random.randint(50, 100)
-    #     sleep_score = random.randint(40, 100)
-    #     for date in date_ranges:
-    #         measured_at = date
-    #     cur.execute("""INSERT INTO biometrics(biometric_id, user_id, weight, weight_unit, height, height_unit, blood_pressure_avg, heart_rate_avg, sleep_score, measured_at)
-    #                    VALUES(?,?,?,?,?,?,?,?,?,?)""",
-    #                 (bid, user_id, weight, 'kg', height, 'cm', bp, hr, sleep_score, measured_at))
 
     # 9) Biometrics
     biometric_id = 1
