@@ -27,7 +27,6 @@ DB_PATH = "garmin_clone.db"
 # เพิ่มในส่วน Configuration ด้านบน (พร้อมกับ N_USERS, N_ACTIVITIES, ฯลฯ)
 DAYS_HISTORY = 30        # For biometrics: collect one record per user per day for this many days
 
-# <<< ต้องเพิ่มส่วนนี้ที่นี่ >>>
 # List of tables to clear to ensure the script is idempotent (can be re-run)
 TABLES_TO_CLEAR = [
     'genders', 'mission_difficulties', 'activity_types', 'locations', 'users',
@@ -35,7 +34,6 @@ TABLES_TO_CLEAR = [
     'event_participants', 'goals', 'biometrics', 'notification', 'news',
     'achievements', 'missions'
 ]
-# <<< จบส่วนที่ต้องเพิ่ม >>>
 
 fake = Faker()
 Faker.seed(1)
@@ -49,6 +47,24 @@ def rand_between_dates(start_days_ago, end_days_ago):
     end = datetime.utcnow() - timedelta(days=end_days_ago)
     return fake.date_time_between(start_date=start, end_date=end).isoformat()
 
+# NEW: Helper function to generate realistic datetimes (excluding deep night)
+def rand_realistic_datetime(start_days_ago, end_days_ago, start_hour=6, end_hour=23):
+    start_dt = datetime.utcnow() - timedelta(days=start_days_ago)
+    end_dt = datetime.utcnow() - timedelta(days=end_days_ago)
+
+    # 1. Randomly pick a date within the range
+    random_datetime = fake.date_time_between(start_date=start_dt, end_date=end_dt)
+    
+    # 2. Fix the time part to be realistic
+    # Ensure time is within the desired range (default 06:00 to 23:59)
+    random_hour = random.randint(start_hour, end_hour)
+    random_minute = random.randint(0, 59)
+    random_second = random.randint(0, 59)
+    
+    return datetime(random_datetime.year, random_datetime.month, random_datetime.day,
+                    random_hour, random_minute, random_second).isoformat()
+
+
 def main():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -59,8 +75,7 @@ def main():
     # 0) NEW: Clear data from all tables to allow re-running the script
     print("Clearing existing mock data...")
     
-    # <<< แก้ไขตรงนี้: ใช้ .reverse() หรือ reversed() เพื่อลบในลำดับย้อนกลับ >>>
-    # เราจะใช้ reversed() เพื่อลบตารางลูกก่อนตารางแม่
+    # ใช้ reversed() เพื่อลบตารางลูกก่อนตารางแม่
     for table in reversed(TABLES_TO_CLEAR):
         try:
             # ใช้ 'DELETE FROM' เพื่อล้างข้อมูลในตาราง
@@ -214,7 +229,8 @@ def main():
         username = (first + last + str(random.randint(1,999))).lower()
         email = username + "@example.com"
         phone = fake.msisdn()[:12]
-        registration_date = rand_between_dates(800, 0)  # registered within last ~2 years
+        # REVISED: ใช้ rand_realistic_datetime
+        registration_date = rand_realistic_datetime(800, 0)  # registered within last ~2 years
         bday = fake.date_of_birth(minimum_age=18, maximum_age=70).isoformat()
         is_active = 1 if random.random() > 0.05 else 0
         user_verify = 1 if random.random() > 0.2 else 0
@@ -229,15 +245,17 @@ def main():
     for _ in range(N_DEVICES):
         user_id = random.choice(user_ids)
         model = random.choice(device_models)
-        created_at = rand_between_dates(800, 0)
+        # REVISED: ใช้ rand_realistic_datetime
+        created_at = rand_realistic_datetime(800, 0)
         cur.execute("INSERT INTO devices(device_id, user_id, device_model, created_at) VALUES(?,?,?,?)",
                     (device_id, user_id, model, created_at))
         device_id += 1
 
-   # 5) Activities
+   # 5) Activities (ตรรกะเวลาสอดคล้องกับกิจกรรม ถูกกำหนดไว้เฉพาะแล้ว)
     activity_id = 1
     
     # ใช้นโยบายการกำหนดค่าขอบเขตสูงสุดที่ปลอดภัยที่สุด
+    # max_device_id คือ ID อุปกรณ์ที่มีอยู่จริงสูงสุด (N_DEVICES)
     max_device_id_to_link = max(1, device_id - 1) 
     
     for _ in range(N_ACTIVITIES):
@@ -266,60 +284,94 @@ def main():
             # ระยะเวลาปานกลาง: 30 - 90 นาที
             duration_min = random.randint(30, 90)
 
-        # 2. คำนวณ start_datetime และ end_datetime
-        # end_dt: สุ่มในอดีต (ไม่เกิน 720 วันที่ผ่านมา)
-        end_dt = datetime.utcnow() - timedelta(days=random.randint(0, 720), 
-                                                minutes=random.randint(0, 1440))
-        # start_dt: ย้อนกลับจาก end_dt ด้วย duration_min
-        start_dt = end_dt - timedelta(minutes=duration_min)
+        # 2. คำนวณ start_datetime และ end_datetime ที่สอดคล้องกับเวลาจริงของมนุษย์
         
-        # --- การคำนวณ Distance และ Calories ตาม ID 1-10 (ยังคงเดิม) ---
+        # 2a. กำหนดวันที่ในอดีต (ไม่เกิน 720 วัน)
+        date_of_activity = datetime.utcnow().date() - timedelta(days=random.randint(0, 720))
+        
+        # 2b. กำหนดช่วงชั่วโมงที่เหมาะสม
+        if activity_type_id in [1, 2, 3, 4, 5, 6]: # กิจกรรมกลางแจ้ง/น้ำ (Run, Walk, Cycle, Hike, Swim, Rowing)
+            # 5 AM ถึง 9 PM (เพื่อความปลอดภัยและแสงสว่าง)
+            start_hour_min = 5 
+            end_hour_max = 21 # 21:00 น.
+        else: # กิจกรรมในร่ม/สตูดิโอ (Strength, Yoga, Hiit, Dance)
+            # 6 AM ถึง 11 PM
+            start_hour_min = 6
+            end_hour_max = 23 # 23:00 น.
 
-        distance = 0.0
+        # 2c. คำนวณชั่วโมงเริ่มต้นที่ปลอดภัย (Start Hour)
+        max_duration_hours = duration_min / 60
+        # ชั่วโมงที่ช้าที่สุดที่กิจกรรมสามารถเริ่มได้
+        latest_safe_start_hour = end_hour_max - int(max_duration_hours)
+
+        # สุ่มชั่วโมงเริ่มต้นจริง (ต้องอยู่ระหว่าง start_hour_min ถึง latest_safe_start_hour)
+        actual_start_hour = random.randint(start_hour_min, max(start_hour_min, latest_safe_start_hour))
+        
+        random_minute = random.randint(0, 59)
+        random_second = random.randint(0, 59)
+
+        # start_dt: รวมวันที่ในอดีตกับชั่วโมงเริ่มต้นที่สุ่มมา
+        start_dt = datetime(date_of_activity.year, date_of_activity.month, date_of_activity.day,
+                            actual_start_hour, random_minute, random_second)
+        
+        # end_dt: คำนวณ end time
+        end_dt = start_dt + timedelta(minutes=duration_min)
+
+        # --- NEW LOGIC START: การคำนวณ Distance และ Calories ตาม ID 1-10 (รวมการปรับปรุงก่อนหน้านี้) ---
+
+        distance = 0.0 # ตั้งค่าเริ่มต้น distance เป็น 0.0 เสมอ
         calories = 0
         
         # 1. กิจกรรมที่เน้นระยะทางเป็นหลัก (ID 1 ถึง 6)
         if activity_type_id in [1, 2, 3, 4, 5, 6]:
-            if activity_type_id == 1: # Run
+            
+             # กำหนดค่าเฉลี่ยตาม ID (Run, Walk, Cycle, Hike, Swim, Rowing)
+             # (avg_dist_km, dist_dev, cal_per_km)
+             if activity_type_id == 1: # Run
+                  # วิ่ง: ระยะปานกลาง, เผาผลาญสูง
                   avg_dist, dist_dev, cal_per_km = 6, 3, random.uniform(80, 100)
-            elif activity_type_id == 2: # Walk
+             elif activity_type_id == 2: # Walk
+                  # เดิน: ระยะสั้นถึงปานกลาง, เผาผลาญต่ำ
                   avg_dist, dist_dev, cal_per_km = 4, 2, random.uniform(50, 70)
-            elif activity_type_id == 3: # Cycling
+             elif activity_type_id == 3: # Cycling
+                  # ปั่นจักรยาน: ระยะทางสูง, เผาผลาญต่ำ
                   avg_dist, dist_dev, cal_per_km = 25, 10, random.uniform(30, 60)
-            elif activity_type_id == 5: # Swim
+             elif activity_type_id == 5: # Swim
+                  # ว่ายน้ำ: ระยะทางต่ำ, เผาผลาญสูงมาก
                   avg_dist, dist_dev, cal_per_km = 1.5, 0.5, random.uniform(90, 120)
-            else: # Hike (4), Rowing (6)
+             else: # Hike (4), Rowing (6) (ค่ากลาง)
                   avg_dist, dist_dev, cal_per_km = 4, 2, random.uniform(60, 90)
              
-            distance = round(max(0.1, random.gauss(avg_dist, dist_dev)), 2)
-            calories = int(max(100, distance * cal_per_km))
+             # คำนวณระยะทางแบบ Gaussian และคำนวณแคลอรี่ตามระยะทาง
+             distance = round(max(0.1, random.gauss(avg_dist, dist_dev)), 2)
+             calories = int(max(100, distance * cal_per_km))
 
         # 2. กิจกรรมที่เน้นเวลา/ความแข็งแรง (ID 7 ถึง 10)
         elif activity_type_id in [7, 8, 9, 10]:
-            
-            distance = 0.0
-            
-            # กำหนดอัตราการเผาผลาญตาม ID (kcal/นาที)
-            if activity_type_id == 9: # Hiit / Functional
-                 cal_per_min = random.uniform(8, 13)
-            elif activity_type_id == 7: # Strength Training
-                 cal_per_min = random.uniform(6, 10)
-            elif activity_type_id == 10: # Dance / Aerobics
-                 cal_per_min = random.uniform(5, 9)
-            else: # Yoga / Pilates (8)
-                 cal_per_min = random.uniform(3, 6)
+             
+             distance = 0.0 # ตั้งระยะทางเป็น 0 สำหรับกิจกรรม Time-based
+             
+             # กำหนดอัตราการเผาผลาญตาม ID (kcal/นาที)
+             if activity_type_id == 9: # Hiit / Functional (เผาผลาญสูงมาก)
+                  cal_per_min = random.uniform(8, 13)
+             elif activity_type_id == 7: # Strength Training (เผาผลาญสูง)
+                  cal_per_min = random.uniform(6, 10)
+             elif activity_type_id == 10: # Dance / Aerobics (เผาผลาญปานกลางค่อนข้างสูง)
+                  cal_per_min = random.uniform(5, 9)
+             else: # Yoga / Pilates (8) (เผาผลาญต่ำ)
+                  cal_per_min = random.uniform(3, 6)
                   
-            calories = int(max(50, duration_min * cal_per_min))
+             # คำนวณแคลอรี่ตามระยะเวลา (duration_min)
+             calories = int(max(50, duration_min * cal_per_min))
         
+        # 3. ตรวจสอบแคลอรี่ขั้นต่ำเพื่อป้องกันค่าต่ำเกินไป
         calories = max(50, calories)
 
-        # --- END OF LOGIC ---
+        # --- NEW LOGIC END ---
         
         # 3. กำหนด created_at และ updated_at ให้สมจริง (ต้องเกิดขึ้นหลัง start_dt และก่อน end_dt)
         
         # created_at: บันทึกข้อมูลหลังกิจกรรมเริ่ม (1-10 นาทีหลัง start_dt)
-        # เนื่องจากกิจกรรมถูกบันทึกโดยอุปกรณ์/แอพ ดังนั้น created_at ต้องเกิดขึ้นในช่วงกิจกรรม
-        # หรือไม่นานหลังจากนั้น
         created_at_dt = start_dt + timedelta(minutes=random.randint(1, 10))
         
         # updated_at: อาจเกิดขึ้นหรือไม่ก็ได้ (ถ้ามีการแก้ไข) -> สุ่มให้เกิด 50%
@@ -338,7 +390,7 @@ def main():
                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (activity_id, user_id, activity_type_id, loc_id, device_ref, 
                      start_dt.isoformat(), end_dt.isoformat(), distance, calories, is_verified, 
-                     created_at_dt.isoformat(), updated_at_dt.isoformat())) # <<--- ใช้ .isoformat() จาก datetime object
+                     created_at_dt.isoformat(), updated_at_dt.isoformat()))
         activity_id += 1
 
     # 6) Communities and community users
@@ -346,13 +398,15 @@ def main():
         location_id = random.randint(1, N_LOCATIONS)
         name = f"{random.choice(['Runners','Cyclists','Hikers','Swimmers'])} Group {cid}"
         description = fake.sentence(nb_words=8)
-        created_at = rand_between_dates(800, 0)
+        # REVISED: ใช้ rand_realistic_datetime
+        created_at = rand_realistic_datetime(800, 0)
         cur.execute("INSERT INTO communities(community_id, location_id, name, description, is_public, created_at) VALUES(?,?,?,?,?,?)",
                     (cid, location_id, name, description, 1 if random.random()>0.1 else 0, created_at))
         # members
         members = random.sample(user_ids, k=max(3, random.randint(5, 40)))
         for u in members:
-            joined_at = rand_between_dates(800, 0)
+            # REVISED: ใช้ rand_realistic_datetime
+            joined_at = rand_realistic_datetime(800, 0)
             is_admin = 1 if random.random() < 0.05 else 0
             try:
                 cur.execute("INSERT INTO communities_users(community_id, user_id, joined_at, is_admin) VALUES(?,?,?,?)",
@@ -366,8 +420,12 @@ def main():
         location_id = random.choice([random.randint(1, N_LOCATIONS), None])
         name = f"Event {eid} - {fake.word().capitalize()}"
         event_descrip = fake.sentence(nb_words=12)
-        start_dt = datetime.utcnow() + timedelta(days=random.randint(-200, 100))
+        
+        # REVISED: ตรรกะเวลาของ Events - ต้องเกิดขึ้นในชั่วโมงที่สมจริง (8 AM - 8 PM)
+        event_start_dt_str = rand_realistic_datetime(-200, 100, start_hour=8, end_hour=20)
+        start_dt = datetime.fromisoformat(event_start_dt_str)
         end_dt = start_dt + timedelta(hours=random.randint(1, 6))
+        
         cur.execute("INSERT INTO events(event_id, community_id, location_id, event_name, event_descrip, start_datetime, end_datetime) VALUES(?,?,?,?,?,?,?)",
                     (eid, community_id, location_id, name, event_descrip, start_dt.isoformat(), end_dt.isoformat()))
         # participants
@@ -375,14 +433,21 @@ def main():
         participants = random.sample(user_ids, k=min(len(user_ids), num_participants))
         for u in participants:
             status = random.choice(['rsvp','checked_in','cancelled'])
-            checkin = rand_between_dates(400, 0) if status == 'checked_in' else rand_between_dates(700, 400)
+            # checkin_datetime ต้องเกิดขึ้นหลัง start_dt
+            if status == 'checked_in':
+                # สุ่มเวลา Check-in หลัง start_dt แต่ก่อน end_dt
+                checkin_dt = fake.date_time_between(start_date=start_dt, end_date=end_dt)
+                checkin = checkin_dt.isoformat()
+            else:
+                checkin = None
+            
             try:
                 cur.execute("INSERT INTO event_participants(event_id, user_id, location_id, status, checkin_datetime) VALUES(?,?,?,?,?)",
                             (eid, u, location_id, status, checkin))
             except sqlite3.IntegrityError:
                 pass
 
-    # 8) Goals
+    # 8) Goals (ตรรกะเวลา Created_at -> Start_dt -> End_dt)
     # Map ID to Activity Name (อ้างอิงจาก activity_types ล่าสุด)
     activity_type_names = [
         'Run', 'Walk', 'Cycling', 'Hike', 'Swim', 'Rowing', 
@@ -391,6 +456,8 @@ def main():
     
     for gid in range(1, N_GOALS+1):
         user_id = random.choice(user_ids)
+        
+        # 1. activity_type_id เป็น NOT NULL เสมอ (สุ่ม ID ระหว่าง 1-10)
         activity_type_id = random.randint(1, len(activity_type_names))
         activity_name = activity_type_names[activity_type_id - 1]
         
@@ -398,7 +465,7 @@ def main():
         target_amount = 0.0
         goal_name_template = ""
         
-        # ID 1-6: กิจกรรมเน้นระยะทาง 
+        # ID 1-6: กิจกรรมเน้นระยะทาง (สามารถเป็น distance_km หรือ calories)
         if activity_type_id <= 6:
             target_metric = random.choices(['distance_km', 'calories'], weights=[6, 4], k=1)[0]
             
@@ -416,7 +483,7 @@ def main():
                 target_amount = round(random.uniform(500, 10000), 0)
                 goal_name_template = f"Burn {int(target_amount)} kcal with {activity_name}"
         
-        # ID 7-10: กิจกรรมเน้นเวลา/ความแข็งแรง
+        # ID 7-10: กิจกรรมเน้นเวลา/ความแข็งแรง (ต้องเป็น calories)
         else:
             target_metric = 'calories'
             
@@ -432,15 +499,14 @@ def main():
         # 4. ปรับปรุงลำดับเวลา (Created_at -> Start_dt -> End_dt)
         status = random.choices(['active', 'completed', 'failed'], weights=[6, 3, 1], k=1)[0]
         
-        # 4a. กำหนด created_at (datetime object)
-        # สร้างเป้าหมายในช่วง 400 วันที่ผ่านมา
-        created_at_dt = fake.date_time_between(start_date=datetime.utcnow() - timedelta(days=400), 
-                                                end_date=datetime.utcnow() - timedelta(days=0))
-
+        # REVISED: 4a. กำหนด created_at (datetime object) ด้วยเวลาที่สมจริง (6 AM - 11 PM)
+        created_at_dt_str = rand_realistic_datetime(400, 0, start_hour=6, end_hour=23)
+        created_at_dt = datetime.fromisoformat(created_at_dt_str)
+        
         # 4b. กำหนด start_dt (date object)
         # เป้าหมายเริ่มในวันเดียวกับที่สร้าง หรือ 1-15 วันหลังจากสร้าง
         start_date_range_end = created_at_dt + timedelta(days=15)
-        # ต้องไม่ให้ start_dt อยู่ในอนาคตไกลเกินไป
+        # ต้องไม่ให้ start_dt อยู่ในอนาคตไกลเกินไป (ไม่เกิน 7 วันนับจากวันนี้)
         start_dt = fake.date_time_between(start_date=created_at_dt, 
                                           end_date=min(start_date_range_end, datetime.utcnow() + timedelta(days=7))).date()
         
@@ -462,7 +528,8 @@ def main():
         cur.execute("""INSERT INTO goals(goal_id, user_id, activity_type_id, goal_name, target_amount, target_metric, start_dt, end_dt, status, created_at)
                        VALUES(?,?,?,?,?,?,?,?,?,?)""",
                     (gid, user_id, activity_type_id, goal_name, target_amount, target_metric, start_dt.isoformat(), end_dt.isoformat(), status, created_at))
-    
+
+
     # 9) Biometrics
     biometric_id = 1
     today = datetime.utcnow().date() 
@@ -478,6 +545,7 @@ def main():
         for day_offset in range(DAYS_HISTORY):
             # 2. คำนวณวันที่และเวลาที่วัด
             measured_date = today - timedelta(days=day_offset)
+            # measured_at_dt: ช่วงเวลาที่เหมาะสม (6 AM ถึง 10 PM)
             measured_at_dt = measured_date + timedelta(hours=random.randint(6, 22), minutes=random.randint(0, 59))
             measured_at = measured_at_dt.isoformat()
 
@@ -499,16 +567,16 @@ def main():
             
             biometric_id += 1
 
-    # ... (โค้ดส่วน 10-13 และส่วนท้ายยังคงเดิม) ...
-
     # 10) Notifications
     for nid in range(1, N_NOTIFICATIONS+1):
         user_id = random.choice(user_ids)
-        device_ref = random.choice(range(1, device_id)) if random.random() > 0.5 else None
+        # ตรวจสอบว่า device_id มีอยู่จริงหรือไม่
+        device_ref = random.choice(range(1, device_id)) if device_id > 1 and random.random() > 0.5 else None
         ntype = random.choice(['reminder','promotion','system'])
         title = fake.sentence(nb_words=4)
         body = fake.sentence(nb_words=10)
-        created_at = rand_between_dates(120, 0)
+        # REVISED: ใช้ rand_realistic_datetime
+        created_at = rand_realistic_datetime(120, 0)
         is_read = 1 if random.random()>0.6 else 0
         cur.execute("""INSERT INTO notification(notification_id, user_id, device_id, notification_type, title, body, created_at, is_read)
                        VALUES(?,?,?,?,?,?,?,?)""",
@@ -518,7 +586,8 @@ def main():
     for nid in range(1, N_NEWS+1):
         subj = f"News {nid}: {fake.word().capitalize()}"
         des = fake.paragraph(nb_sentences=2)
-        start_dt = rand_between_dates(300, 0)
+        # REVISED: start_dt ใช้ rand_realistic_datetime
+        start_dt = rand_realistic_datetime(300, 0)
         end_dt = None
         created_by = random.choice(user_ids)
         cur.execute("""INSERT INTO news(news_id, news_subject, news_descrip, news_start_datetime, news_end_datetime, is_read, created_by_user_id)
@@ -532,7 +601,8 @@ def main():
         code = f"ACH{random.randint(1000,9999)}"
         name = random.choice(['First Run','Marathon','Century Ride','Early Riser','Consistency'])
         des = f"Awarded for {name.lower()}"
-        earned_at = rand_between_dates(400, 0)
+        # REVISED: earned_at ใช้ rand_realistic_datetime
+        earned_at = rand_realistic_datetime(400, 0)
         try:
             cur.execute("""INSERT INTO achievements(achievement_id, user_id, a_code, a_name, a_descrip, earned_at)
                            VALUES(?,?,?,?,?,?)""", (a_id, user_id, code, name, des, earned_at))
