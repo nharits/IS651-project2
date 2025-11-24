@@ -80,7 +80,22 @@ def main():
     for i, m in enumerate(mission_diff, start=1):
         cur.execute("INSERT INTO mission_difficulties(mission_difficulty_id,name) VALUES(?,?)", (i,m))
 
-    activity_types = ['run','walk','ride','hike','swim','strength']
+    activity_types = [
+        # ID 1-6: กิจกรรมที่มีระยะทางเป็นหลัก (Distance-based)
+        'Run',              # 1: วิ่ง
+        'Walk',             # 2: เดิน
+        'Cycling',          # 3: ปั่นจักรยาน
+        'Hike',             # 4: เดินป่า
+        'Swim',             # 5: ว่ายน้ำ
+        'Rowing',           # 6: พายเรือ/กรรเชียงบก
+        
+        # ID 7-10: กิจกรรมที่เน้นความแข็งแรง/ใช้เวลา (Time/Strength-based)
+        'Strength Training',# 7: ฝึกความแข็งแรง/ยกน้ำหนัก
+        'Yoga / Pilates',   # 8: โยคะ, พิลาทิส
+        'Hiit / Functional',# 9: ฝึกความเข้มข้นสูงและฟังก์ชัน
+        'Dance / Aerobics'  # 10: เต้น, แอโรบิก, ซุมบ้า
+    ]
+    
     for i, a in enumerate(activity_types, start=1):
         cur.execute("INSERT INTO activity_types(activity_type_id,name) VALUES(?,?)", (i,a))
 
@@ -224,34 +239,70 @@ def main():
     
     # ใช้นโยบายการกำหนดค่าขอบเขตสูงสุดที่ปลอดภัยที่สุด
     # max_device_id คือ ID อุปกรณ์ที่มีอยู่จริงสูงสุด (N_DEVICES)
-    # เราใช้ max(1, device_id - 1) เพื่อรับประกันว่าขอบเขตบนอย่างน้อยคือ 1 
-    # แม้ในกรณีที่ N_DEVICES ถูกตั้งเป็น 0
     max_device_id_to_link = max(1, device_id - 1) 
     
     for _ in range(N_ACTIVITIES):
         user_id = random.choice(user_ids)
-        activity_type_id = random.randint(1, len(activity_types))
+        activity_type_id = random.randint(1, len(activity_types)) # สุ่มจากประเภทกิจกรรม 1-10
         loc_id = random.randint(1, N_LOCATIONS)
-        
-        # NEW: กำหนด device_id เสมอ (ไม่มี NULL)
-        # สุ่ม ID ระหว่าง 1 ถึง max_device_id_to_link
         device_ref = random.randint(1, max_device_id_to_link)
 
-        # realistic durations: 10 - 180 minutes
+        # realistic durations: 10 - 180 minutes (ใช้สำหรับคำนวณแคลอรี่ของกิจกรรม Time-based)
         duration_min = random.randint(10, 180)
         end_dt = datetime.utcnow() - timedelta(days=random.randint(0, 720), minutes=random.randint(0, 1440))
         start_dt = end_dt - timedelta(minutes=duration_min)
         
-        # distance: สุ่มโดยอิงจากประเภทกิจกรรม
-        if activity_type_id == 1:
-             avg_dist = 5
-        elif activity_type_id == 2:
-             avg_dist = 15
-        else:
-             avg_dist = 2
+        # --- NEW LOGIC START: การคำนวณ Distance และ Calories ตาม ID 1-10 ---
+
+        distance = 0.0 # ตั้งค่าเริ่มต้น distance เป็น 0.0 เสมอ
+        calories = 0
+        
+        # 1. กิจกรรมที่เน้นระยะทางเป็นหลัก (ID 1 ถึง 6)
+        if activity_type_id in [1, 2, 3, 4, 5, 6]:
+            
+             # กำหนดค่าเฉลี่ยตาม ID (Run, Walk, Cycle, Hike, Swim, Rowing)
+             # (avg_dist_km, dist_dev, cal_per_km)
+             if activity_type_id == 1: # Run
+                  # วิ่ง: ระยะปานกลาง, เผาผลาญสูง
+                  avg_dist, dist_dev, cal_per_km = 6, 3, random.uniform(80, 100)
+             elif activity_type_id == 2: # Walk
+                  # เดิน: ระยะสั้นถึงปานกลาง, เผาผลาญต่ำ
+                  avg_dist, dist_dev, cal_per_km = 4, 2, random.uniform(50, 70)
+             elif activity_type_id == 3: # Cycling
+                  # ปั่นจักรยาน: ระยะทางสูง, เผาผลาญต่ำ
+                  avg_dist, dist_dev, cal_per_km = 25, 10, random.uniform(30, 60)
+             elif activity_type_id == 5: # Swim
+                  # ว่ายน้ำ: ระยะทางต่ำ, เผาผลาญสูงมาก
+                  avg_dist, dist_dev, cal_per_km = 1.5, 0.5, random.uniform(90, 120)
+             else: # Hike (4), Rowing (6) (ค่ากลาง)
+                  avg_dist, dist_dev, cal_per_km = 4, 2, random.uniform(60, 90)
              
-        distance = round(max(0.1, random.gauss(avg_dist, 5)), 2)
-        calories = int(max(50, distance * random.uniform(50, 80)))
+             # คำนวณระยะทางแบบ Gaussian และคำนวณแคลอรี่ตามระยะทาง
+             distance = round(max(0.1, random.gauss(avg_dist, dist_dev)), 2)
+             calories = int(max(100, distance * cal_per_km))
+
+        # 2. กิจกรรมที่เน้นเวลา/ความแข็งแรง (ID 7 ถึง 10)
+        elif activity_type_id in [7, 8, 9, 10]:
+             
+             distance = 0.0 # ตั้งระยะทางเป็น 0 สำหรับกิจกรรม Time-based
+             
+             # กำหนดอัตราการเผาผลาญตาม ID (kcal/นาที)
+             if activity_type_id == 9: # Hiit / Functional (เผาผลาญสูงมาก)
+                  cal_per_min = random.uniform(8, 13)
+             elif activity_type_id == 7: # Strength Training (เผาผลาญสูง)
+                  cal_per_min = random.uniform(6, 10)
+             elif activity_type_id == 10: # Dance / Aerobics (เผาผลาญปานกลางค่อนข้างสูง)
+                  cal_per_min = random.uniform(5, 9)
+             else: # Yoga / Pilates (8) (เผาผลาญต่ำ)
+                  cal_per_min = random.uniform(3, 6)
+                  
+             # คำนวณแคลอรี่ตามระยะเวลา (duration_min)
+             calories = int(max(50, duration_min * cal_per_min))
+        
+        # 3. ตรวจสอบแคลอรี่ขั้นต่ำเพื่อป้องกันค่าต่ำเกินไป
+        calories = max(50, calories)
+
+        # --- NEW LOGIC END ---
         
         is_verified = 1 if random.random() > 0.3 else 0
         created_at = (start_dt + timedelta(minutes=1)).isoformat()
