@@ -238,7 +238,6 @@ def main():
     activity_id = 1
     
     # ใช้นโยบายการกำหนดค่าขอบเขตสูงสุดที่ปลอดภัยที่สุด
-    # max_device_id คือ ID อุปกรณ์ที่มีอยู่จริงสูงสุด (N_DEVICES)
     max_device_id_to_link = max(1, device_id - 1) 
     
     for _ in range(N_ACTIVITIES):
@@ -247,70 +246,99 @@ def main():
         loc_id = random.randint(1, N_LOCATIONS)
         device_ref = random.randint(1, max_device_id_to_link)
 
-        # realistic durations: 10 - 180 minutes (ใช้สำหรับคำนวณแคลอรี่ของกิจกรรม Time-based)
-        duration_min = random.randint(10, 180)
-        end_dt = datetime.utcnow() - timedelta(days=random.randint(0, 720), minutes=random.randint(0, 1440))
+        # 1. กำหนดระยะเวลา (duration_min) ตาม Activity Type ให้เหมาะสม
+        if activity_type_id in [1, 2, 4, 6, 10]: # Run, Walk, Hike, Rowing, Dance/Aerobics
+            # ระยะเวลาปานกลางถึงยาว: 20 - 120 นาที
+            duration_min = random.randint(20, 120)
+        elif activity_type_id == 3: # Cycling
+            # ระยะเวลายาว: 60 - 180 นาที
+            duration_min = random.randint(60, 180)
+        elif activity_type_id in [7]: # Strength Training
+            # ระยะเวลาที่กำหนด: 45 - 90 นาที
+            duration_min = random.randint(45, 90)
+        elif activity_type_id in [8]: # Yoga / Pilates
+            # ระยะเวลาที่กำหนด: 30 - 90 นาที
+            duration_min = random.randint(30, 90)
+        elif activity_type_id in [9]: # Hiit / Functional
+            # ระยะเวลาสั้น: 15 - 60 นาที
+            duration_min = random.randint(15, 60)
+        else: # Swim (5)
+            # ระยะเวลาปานกลาง: 30 - 90 นาที
+            duration_min = random.randint(30, 90)
+
+        # 2. คำนวณ start_datetime และ end_datetime
+        # end_dt: สุ่มในอดีต (ไม่เกิน 720 วันที่ผ่านมา)
+        end_dt = datetime.utcnow() - timedelta(days=random.randint(0, 720), 
+                                                minutes=random.randint(0, 1440))
+        # start_dt: ย้อนกลับจาก end_dt ด้วย duration_min
         start_dt = end_dt - timedelta(minutes=duration_min)
         
-        # --- NEW LOGIC START: การคำนวณ Distance และ Calories ตาม ID 1-10 ---
+        # --- การคำนวณ Distance และ Calories ตาม ID 1-10 (ยังคงเดิม) ---
 
-        distance = 0.0 # ตั้งค่าเริ่มต้น distance เป็น 0.0 เสมอ
+        distance = 0.0
         calories = 0
         
         # 1. กิจกรรมที่เน้นระยะทางเป็นหลัก (ID 1 ถึง 6)
         if activity_type_id in [1, 2, 3, 4, 5, 6]:
-            
-             # กำหนดค่าเฉลี่ยตาม ID (Run, Walk, Cycle, Hike, Swim, Rowing)
-             # (avg_dist_km, dist_dev, cal_per_km)
-             if activity_type_id == 1: # Run
-                  # วิ่ง: ระยะปานกลาง, เผาผลาญสูง
+            if activity_type_id == 1: # Run
                   avg_dist, dist_dev, cal_per_km = 6, 3, random.uniform(80, 100)
-             elif activity_type_id == 2: # Walk
-                  # เดิน: ระยะสั้นถึงปานกลาง, เผาผลาญต่ำ
+            elif activity_type_id == 2: # Walk
                   avg_dist, dist_dev, cal_per_km = 4, 2, random.uniform(50, 70)
-             elif activity_type_id == 3: # Cycling
-                  # ปั่นจักรยาน: ระยะทางสูง, เผาผลาญต่ำ
+            elif activity_type_id == 3: # Cycling
                   avg_dist, dist_dev, cal_per_km = 25, 10, random.uniform(30, 60)
-             elif activity_type_id == 5: # Swim
-                  # ว่ายน้ำ: ระยะทางต่ำ, เผาผลาญสูงมาก
+            elif activity_type_id == 5: # Swim
                   avg_dist, dist_dev, cal_per_km = 1.5, 0.5, random.uniform(90, 120)
-             else: # Hike (4), Rowing (6) (ค่ากลาง)
+            else: # Hike (4), Rowing (6)
                   avg_dist, dist_dev, cal_per_km = 4, 2, random.uniform(60, 90)
              
-             # คำนวณระยะทางแบบ Gaussian และคำนวณแคลอรี่ตามระยะทาง
-             distance = round(max(0.1, random.gauss(avg_dist, dist_dev)), 2)
-             calories = int(max(100, distance * cal_per_km))
+            distance = round(max(0.1, random.gauss(avg_dist, dist_dev)), 2)
+            calories = int(max(100, distance * cal_per_km))
 
         # 2. กิจกรรมที่เน้นเวลา/ความแข็งแรง (ID 7 ถึง 10)
         elif activity_type_id in [7, 8, 9, 10]:
-             
-             distance = 0.0 # ตั้งระยะทางเป็น 0 สำหรับกิจกรรม Time-based
-             
-             # กำหนดอัตราการเผาผลาญตาม ID (kcal/นาที)
-             if activity_type_id == 9: # Hiit / Functional (เผาผลาญสูงมาก)
-                  cal_per_min = random.uniform(8, 13)
-             elif activity_type_id == 7: # Strength Training (เผาผลาญสูง)
-                  cal_per_min = random.uniform(6, 10)
-             elif activity_type_id == 10: # Dance / Aerobics (เผาผลาญปานกลางค่อนข้างสูง)
-                  cal_per_min = random.uniform(5, 9)
-             else: # Yoga / Pilates (8) (เผาผลาญต่ำ)
-                  cal_per_min = random.uniform(3, 6)
+            
+            distance = 0.0
+            
+            # กำหนดอัตราการเผาผลาญตาม ID (kcal/นาที)
+            if activity_type_id == 9: # Hiit / Functional
+                 cal_per_min = random.uniform(8, 13)
+            elif activity_type_id == 7: # Strength Training
+                 cal_per_min = random.uniform(6, 10)
+            elif activity_type_id == 10: # Dance / Aerobics
+                 cal_per_min = random.uniform(5, 9)
+            else: # Yoga / Pilates (8)
+                 cal_per_min = random.uniform(3, 6)
                   
-             # คำนวณแคลอรี่ตามระยะเวลา (duration_min)
-             calories = int(max(50, duration_min * cal_per_min))
+            calories = int(max(50, duration_min * cal_per_min))
         
-        # 3. ตรวจสอบแคลอรี่ขั้นต่ำเพื่อป้องกันค่าต่ำเกินไป
         calories = max(50, calories)
 
-        # --- NEW LOGIC END ---
+        # --- END OF LOGIC ---
         
+        # 3. กำหนด created_at และ updated_at ให้สมจริง (ต้องเกิดขึ้นหลัง start_dt และก่อน end_dt)
+        
+        # created_at: บันทึกข้อมูลหลังกิจกรรมเริ่ม (1-10 นาทีหลัง start_dt)
+        # เนื่องจากกิจกรรมถูกบันทึกโดยอุปกรณ์/แอพ ดังนั้น created_at ต้องเกิดขึ้นในช่วงกิจกรรม
+        # หรือไม่นานหลังจากนั้น
+        created_at_dt = start_dt + timedelta(minutes=random.randint(1, 10))
+        
+        # updated_at: อาจเกิดขึ้นหรือไม่ก็ได้ (ถ้ามีการแก้ไข) -> สุ่มให้เกิด 50%
+        if random.random() > 0.5:
+             # อัปเดตหลัง created_at และก่อน end_dt เล็กน้อย
+             update_offset = random.randint(5, duration_min)
+             updated_at_dt = created_at_dt + timedelta(minutes=update_offset)
+             # ตรวจสอบให้ updated_at ไม่เลย end_dt
+             updated_at_dt = min(updated_at_dt, end_dt)
+        else:
+             updated_at_dt = created_at_dt # ถ้าไม่มีการอัปเดต updated_at = created_at
+
         is_verified = 1 if random.random() > 0.3 else 0
-        created_at = (start_dt + timedelta(minutes=1)).isoformat()
-        updated_at = (start_dt + timedelta(minutes=2)).isoformat()
         
         cur.execute("""INSERT INTO activities(activity_id, user_id, activity_type_id, location_id, device_id, start_datetime, end_datetime, distance_km, calories_kcal, is_verified, created_at, updated_at)
                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
-                    (activity_id, user_id, activity_type_id, loc_id, device_ref, start_dt.isoformat(), end_dt.isoformat(), distance, calories, is_verified, created_at, updated_at))
+                    (activity_id, user_id, activity_type_id, loc_id, device_ref, 
+                     start_dt.isoformat(), end_dt.isoformat(), distance, calories, is_verified, 
+                     created_at_dt.isoformat(), updated_at_dt.isoformat())) # <<--- ใช้ .isoformat() จาก datetime object
         activity_id += 1
 
     # 6) Communities and community users
@@ -355,20 +383,86 @@ def main():
                 pass
 
     # 8) Goals
+    # Map ID to Activity Name (อ้างอิงจาก activity_types ล่าสุด)
+    activity_type_names = [
+        'Run', 'Walk', 'Cycling', 'Hike', 'Swim', 'Rowing', 
+        'Strength Training', 'Yoga / Pilates', 'Hiit / Functional', 'Dance / Aerobics'
+    ]
+    
     for gid in range(1, N_GOALS+1):
         user_id = random.choice(user_ids)
-        activity_type_id = random.choice([None, random.randint(1, len(activity_types))])
-        goal_name = f"Goal {gid}"
-        target_metric = random.choice(['distance_km','calories'])
-        target_amount = round(random.uniform(10, 500), 2)
-        start_dt = (datetime.utcnow() - timedelta(days=random.randint(0, 120))).date().isoformat()
-        end_dt = (datetime.utcnow() + timedelta(days=random.randint(1, 90))).date().isoformat()
-        status = random.choice(['active','completed','failed'])
-        created_at = rand_between_dates(400, 0)
+        activity_type_id = random.randint(1, len(activity_type_names))
+        activity_name = activity_type_names[activity_type_id - 1]
+        
+        # 2. กำหนด target_metric และ target_amount ให้สอดคล้องกับกิจกรรม
+        target_amount = 0.0
+        goal_name_template = ""
+        
+        # ID 1-6: กิจกรรมเน้นระยะทาง 
+        if activity_type_id <= 6:
+            target_metric = random.choices(['distance_km', 'calories'], weights=[6, 4], k=1)[0]
+            
+            if target_metric == 'distance_km':
+                if activity_type_id in [1, 2, 4]: 
+                    target_amount = round(random.uniform(10, 150), 1) 
+                elif activity_type_id == 3: 
+                    target_amount = round(random.uniform(50, 500), 1) 
+                else: 
+                    target_amount = round(random.uniform(1, 50), 1) 
+                
+                goal_name_template = f"Target {target_amount} km {activity_name}"
+            
+            else: # target_metric == 'calories'
+                target_amount = round(random.uniform(500, 10000), 0)
+                goal_name_template = f"Burn {int(target_amount)} kcal with {activity_name}"
+        
+        # ID 7-10: กิจกรรมเน้นเวลา/ความแข็งแรง
+        else:
+            target_metric = 'calories'
+            
+            if activity_type_id == 9: 
+                 target_amount = round(random.uniform(3000, 12000), 0)
+                 goal_name_template = f"Master {int(target_amount)} kcal of {activity_name}"
+            else: 
+                 target_amount = round(random.uniform(1000, 8000), 0)
+                 goal_name_template = f"Burn {int(target_amount)} kcal of {activity_name}"
+        
+        goal_name = goal_name_template
+        
+        # 4. ปรับปรุงลำดับเวลา (Created_at -> Start_dt -> End_dt)
+        status = random.choices(['active', 'completed', 'failed'], weights=[6, 3, 1], k=1)[0]
+        
+        # 4a. กำหนด created_at (datetime object)
+        # สร้างเป้าหมายในช่วง 400 วันที่ผ่านมา
+        created_at_dt = fake.date_time_between(start_date=datetime.utcnow() - timedelta(days=400), 
+                                                end_date=datetime.utcnow() - timedelta(days=0))
+
+        # 4b. กำหนด start_dt (date object)
+        # เป้าหมายเริ่มในวันเดียวกับที่สร้าง หรือ 1-15 วันหลังจากสร้าง
+        start_date_range_end = created_at_dt + timedelta(days=15)
+        # ต้องไม่ให้ start_dt อยู่ในอนาคตไกลเกินไป
+        start_dt = fake.date_time_between(start_date=created_at_dt, 
+                                          end_date=min(start_date_range_end, datetime.utcnow() + timedelta(days=7))).date()
+        
+        # 4c. กำหนด end_dt (date object) ตาม Status
+        
+        if status == 'completed':
+             # ต้องสิ้นสุดในอดีต (1-60 วันหลังเริ่ม)
+             end_dt = start_dt + timedelta(days=random.randint(1, 60)) 
+        elif status == 'failed':
+             # ต้องสิ้นสุดในอดีต (1-90 วันหลังเริ่ม)
+             end_dt = start_dt + timedelta(days=random.randint(1, 90)) 
+        else: # active
+             # ต้องสิ้นสุดในอนาคต (1-90 วันจากวันนี้)
+             end_dt = (datetime.utcnow() + timedelta(days=random.randint(1, 90))).date()
+
+        # created_at ใช้ isoformat
+        created_at = created_at_dt.isoformat()
+        
         cur.execute("""INSERT INTO goals(goal_id, user_id, activity_type_id, goal_name, target_amount, target_metric, start_dt, end_dt, status, created_at)
                        VALUES(?,?,?,?,?,?,?,?,?,?)""",
-                    (gid, user_id, activity_type_id, goal_name, target_amount, target_metric, start_dt, end_dt, status, created_at))
-
+                    (gid, user_id, activity_type_id, goal_name, target_amount, target_metric, start_dt.isoformat(), end_dt.isoformat(), status, created_at))
+    
     # 9) Biometrics
     biometric_id = 1
     today = datetime.utcnow().date() 
