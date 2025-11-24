@@ -198,6 +198,22 @@ CREATE TABLE missions (
     description TEXT,
     reward_points INTEGER DEFAULT 0
 );
+
+-- 17. ตาราง mission_completion
+CREATE TABLE IF NOT EXISTS mission_completion (
+    user_id                 INTEGER NOT NULL,
+    mission_id              INTEGER NOT NULL,
+    completed_at            TEXT NOT NULL,
+    is_rewarded             INTEGER NOT NULL DEFAULT 1, -- 1=ได้รับรางวัลแล้ว, 0=อยู่ระหว่างการตรวจสอบ (ใช้ในกรณีที่ภารกิจมีเงื่อนไขซับซ้อน)
+    
+    -- กำหนด Primary Key เป็นคู่ user_id และ mission_id 
+    -- เพื่อให้ผู้ใช้ 1 คนทำภารกิจ 1 ชนิดสำเร็จได้แค่ 1 ครั้งเท่านั้น
+    PRIMARY KEY (user_id, mission_id), 
+    
+    -- Foreign Keys เพื่อเชื่อมโยงกับตารางหลัก
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (mission_id) REFERENCES missions(mission_id) ON DELETE CASCADE
+);
 """
 
 def main(db_path="garmin_clone.db"):

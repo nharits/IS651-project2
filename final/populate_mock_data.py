@@ -96,7 +96,9 @@ def main():
     for i, g in enumerate(genders, start=1):
         cur.execute("INSERT INTO genders(gender_id,name) VALUES(?,?)", (i,g))
 
-    mission_diff = ['easy','medium','hard']
+    # MISSION DIFFICULTIES
+    # เพิ่ม 'extreme' เพื่อให้ครบ 4 ระดับ ตาม logic การให้รางวัลใหม่
+    mission_diff = ['easy','medium','hard','extreme']
     for i, m in enumerate(mission_diff, start=1):
         cur.execute("INSERT INTO mission_difficulties(mission_difficulty_id,name) VALUES(?,?)", (i,m))
 
