@@ -47,22 +47,27 @@ def rand_between_dates(start_days_ago, end_days_ago):
     end = datetime.utcnow() - timedelta(days=end_days_ago)
     return fake.date_time_between(start_date=start, end_date=end).isoformat()
 
-# NEW: Helper function to generate realistic datetimes (excluding deep night)
-def rand_realistic_datetime(start_days_ago, end_days_ago, start_hour=6, end_hour=23):
-    start_dt = datetime.utcnow() - timedelta(days=start_days_ago)
-    end_dt = datetime.utcnow() - timedelta(days=end_days_ago)
-
-    # 1. Randomly pick a date within the range
-    random_datetime = fake.date_time_between(start_date=start_dt, end_date=end_dt)
+# เพิ่มฟังก์ชันนี้หลัง rand_between_dates ในส่วนบนของไฟล์
+def rand_realistic_datetime(start_days_ago, end_days_ago, start_hour, end_hour):
+    """Generates a random datetime within a day range and an hour range."""
     
-    # 2. Fix the time part to be realistic
-    # Ensure time is within the desired range (default 06:00 to 23:59)
-    random_hour = random.randint(start_hour, end_hour)
+    # 1. Determine the date (สามารถเป็นอดีตหรืออนาคต)
+    start_date = datetime.utcnow().date() - timedelta(days=start_days_ago)
+    end_date = datetime.utcnow().date() - timedelta(days=end_days_ago)
+    
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    days_diff = (end_date - start_date).days
+    random_date = start_date + timedelta(days=random.randint(0, days_diff))
+
+    # 2. Determine the time
+    actual_hour = random.randint(start_hour, end_hour)
     random_minute = random.randint(0, 59)
     random_second = random.randint(0, 59)
-    
-    return datetime(random_datetime.year, random_datetime.month, random_datetime.day,
-                    random_hour, random_minute, random_second).isoformat()
+
+    return datetime(random_date.year, random_date.month, random_date.day,
+                    actual_hour, random_minute, random_second).isoformat()
 
 
 def main():
@@ -229,8 +234,10 @@ def main():
         username = (first + last + str(random.randint(1,999))).lower()
         email = username + "@example.com"
         phone = fake.msisdn()[:12]
-        # REVISED: ใช้ rand_realistic_datetime
-        registration_date = rand_realistic_datetime(800, 0)  # registered within last ~2 years
+        
+        # FIX: เพิ่ม start_hour=6 และ end_hour=23 เพื่อกำหนดช่วงเวลาลงทะเบียนให้สมจริง
+        registration_date = rand_realistic_datetime(800, 0, start_hour=6, end_hour=23)  # registered within last ~2 years
+        
         bday = fake.date_of_birth(minimum_age=18, maximum_age=70).isoformat()
         is_active = 1 if random.random() > 0.05 else 0
         user_verify = 1 if random.random() > 0.2 else 0
@@ -246,7 +253,7 @@ def main():
         user_id = random.choice(user_ids)
         model = random.choice(device_models)
         # REVISED: ใช้ rand_realistic_datetime
-        created_at = rand_realistic_datetime(800, 0)
+        created_at = rand_realistic_datetime(800, 0, start_hour=6, end_hour=23)
         cur.execute("INSERT INTO devices(device_id, user_id, device_model, created_at) VALUES(?,?,?,?)",
                     (device_id, user_id, model, created_at))
         device_id += 1
@@ -399,14 +406,14 @@ def main():
         name = f"{random.choice(['Runners','Cyclists','Hikers','Swimmers'])} Group {cid}"
         description = fake.sentence(nb_words=8)
         # REVISED: ใช้ rand_realistic_datetime
-        created_at = rand_realistic_datetime(800, 0)
+        created_at = rand_realistic_datetime(800, 0, start_hour=6, end_hour=23)
         cur.execute("INSERT INTO communities(community_id, location_id, name, description, is_public, created_at) VALUES(?,?,?,?,?,?)",
                     (cid, location_id, name, description, 1 if random.random()>0.1 else 0, created_at))
         # members
         members = random.sample(user_ids, k=max(3, random.randint(5, 40)))
         for u in members:
             # REVISED: ใช้ rand_realistic_datetime
-            joined_at = rand_realistic_datetime(800, 0)
+            joined_at = rand_realistic_datetime(800, 0, start_hour=6, end_hour=23)
             is_admin = 1 if random.random() < 0.05 else 0
             try:
                 cur.execute("INSERT INTO communities_users(community_id, user_id, joined_at, is_admin) VALUES(?,?,?,?)",
@@ -415,37 +422,118 @@ def main():
                 pass
 
     # 7) Events and event participants
+    
+    # --- NEW LOGIC START: Setup Community Data and Themes ---
+    
+    # 1. Fetch Community Names and associated members for better event generation
+    community_data = {}
+    cur.execute("SELECT community_id, name FROM communities")
+    # Store community names to determine event themes
+    for cid, name in cur.fetchall():
+        community_data[cid] = {'name': name, 'members': []}
+
+    cur.execute("SELECT community_id, user_id FROM communities_users")
+    # Store community members to prioritize participation
+    for cid, uid in cur.fetchall():
+        if cid in community_data:
+            community_data[cid]['members'].append(uid)
+
+    # 2. Define event themes based on community names for realistic names/descriptions
+    EVENT_THEMES = {
+        'Runners': {
+            'names': ['5K Fun Run', 'Weekend Trail Marathon', 'Night City Sprint', 'Interval Training Session'],
+            'desc': ['A fun run for all skill levels.', 'Challenge yourself on the mountain trails.', 'Fast-paced running through the downtown area.', 'Improve your speed and endurance.']
+        },
+        'Cyclists': {
+            'names': ['Group Century Ride', 'Scenic Hill Climb', 'Morning Commuter Challenge'],
+            'desc': ['100km ride with the group.', 'Test your endurance on the steepest hills.', 'Quick morning ride to start the day.']
+        },
+        'Hikers': {
+            'names': ['Sunrise Mountain Trek', 'Waterfall Trail Hike', 'City Park Nature Walk'],
+            'desc': ['Early morning hike to catch the sunrise.', 'Explore the best natural trails.', 'A relaxing walk in the city\'s green lung.']
+        },
+        'Swimmers': {
+            'names': ['Pool Lap Challenge', 'Open Water Training Session', 'Triathlon Prep Swim'],
+            'desc': ['See how many laps you can complete.', 'Practice in the local reservoir.', 'Focused session for triathletes.']
+        },
+        'Default': {
+            'names': ['Fitness Meetup', 'Weekly Workout Session', 'Health Seminar'],
+            'desc': ['A general fitness gathering.', 'Get fit together!', 'Learn about optimizing your health.']
+        }
+    }
+    # --- NEW LOGIC END: Setup Community Data and Themes ---
+
+    # Determine the list of possible Location IDs
+    location_ids = list(range(1, N_LOCATIONS + 1))
+    
     for eid in range(1, N_EVENTS+1):
         community_id = random.randint(1, N_COMMUNITIES)
-        location_id = random.choice([random.randint(1, N_LOCATIONS), None])
-        name = f"Event {eid} - {fake.word().capitalize()}"
-        event_descrip = fake.sentence(nb_words=12)
         
-        # REVISED: ตรรกะเวลาของ Events - ต้องเกิดขึ้นในชั่วโมงที่สมจริง (8 AM - 8 PM)
-        event_start_dt_str = rand_realistic_datetime(-200, 100, start_hour=8, end_hour=20)
+        # 1. Generate realistic Event Name and Description based on Community
+        comm_name_prefix = 'Default'
+        comm_name = community_data[community_id]['name']
+        for prefix in EVENT_THEMES.keys():
+            if prefix in comm_name:
+                comm_name_prefix = prefix
+                break
+        
+        theme = EVENT_THEMES[comm_name_prefix]
+        name = random.choice(theme['names'])
+        event_descrip = random.choice(theme['desc'])
+        
+        # 2. Location ID - 90% chance of having a location
+        location_id = random.choice(location_ids * 9 + [None])
+        
+        # 3. Realistic Timing: Occur between 8 AM - 8 PM (20:00)
+        # Event span: random days between 200 days ago and 100 days from now
+        event_start_dt_str = rand_realistic_datetime(start_days_ago=200, end_days_ago=-100, start_hour=8, end_hour=20)
         start_dt = datetime.fromisoformat(event_start_dt_str)
-        end_dt = start_dt + timedelta(hours=random.randint(1, 6))
-        
+        end_dt = start_dt + timedelta(hours=random.randint(1, 6)) # Events last 1 to 6 hours
+
         cur.execute("INSERT INTO events(event_id, community_id, location_id, event_name, event_descrip, start_datetime, end_datetime) VALUES(?,?,?,?,?,?,?)",
                     (eid, community_id, location_id, name, event_descrip, start_dt.isoformat(), end_dt.isoformat()))
-        # participants
-        num_participants = random.randint(3, 60)
-        participants = random.sample(user_ids, k=min(len(user_ids), num_participants))
+        
+        # 4. Participants: Prioritize Community Members and increase volume
+        
+        # Set number of participants to be between 10 and 150 (for BI)
+        MAX_PARTICIPANTS = min(len(user_ids), 150)
+        num_participants = random.randint(10, MAX_PARTICIPANTS) 
+        
+        # 4a. Get users from the hosting community (prioritize)
+        potential_participants = community_data[community_id]['members']
+        
+        # Sample participants, prioritizing community members
+        if len(potential_participants) >= num_participants:
+             # Sample directly from community members (high engagement)
+             participants = random.sample(potential_participants, k=num_participants)
+        else:
+             # Take all community members, and supplement with random users
+             participants = list(potential_participants)
+             supplemental_users = random.sample([u for u in user_ids if u not in participants], 
+                                                k=num_participants - len(participants))
+             participants.extend(supplemental_users)
+
+        # 4b. Insert participants
         for u in participants:
-            status = random.choice(['rsvp','checked_in','cancelled'])
+            # Weighted random: 4x chance of participating (rsvp/checked_in) vs cancelling
+            status = random.choice(['rsvp','checked_in'] * 4 + ['cancelled']) 
+            
             # checkin_datetime ต้องเกิดขึ้นหลัง start_dt
             if status == 'checked_in':
-                # สุ่มเวลา Check-in หลัง start_dt แต่ก่อน end_dt
-                checkin_dt = fake.date_time_between(start_date=start_dt, end_date=end_dt)
+                # สุ่มเวลา Check-in หลัง start_dt แต่ต้องไม่เกิน 1 ชั่วโมงหลังเริ่ม (สมมติว่ามาเร็ว)
+                checkin_dt = fake.date_time_between(start_date=start_dt, end_date=min(end_dt, start_dt + timedelta(hours=1)))
                 checkin = checkin_dt.isoformat()
             else:
                 checkin = None
             
             try:
+                # location_id ใน event_participants คือสถานที่ Check-in (ควรเป็น location_id ของ Event)
+                participant_loc_id = location_id if location_id else random.choice(location_ids)
+                
                 cur.execute("INSERT INTO event_participants(event_id, user_id, location_id, status, checkin_datetime) VALUES(?,?,?,?,?)",
-                            (eid, u, location_id, status, checkin))
+                            (eid, u, participant_loc_id, status, checkin))
             except sqlite3.IntegrityError:
-                pass
+                pass # กรณีที่ user ถูกสุ่มมาซ้ำ    
 
     # 8) Goals (ตรรกะเวลา Created_at -> Start_dt -> End_dt)
     # Map ID to Activity Name (อ้างอิงจาก activity_types ล่าสุด)
@@ -568,31 +656,39 @@ def main():
             biometric_id += 1
 
     # 10) Notifications
-    for nid in range(1, N_NOTIFICATIONS+1):
+    n_id = 1
+    for _ in range(N_NOTIFICATIONS):
         user_id = random.choice(user_ids)
         # ตรวจสอบว่า device_id มีอยู่จริงหรือไม่
         device_ref = random.choice(range(1, device_id)) if device_id > 1 and random.random() > 0.5 else None
         ntype = random.choice(['reminder','promotion','system'])
         title = fake.sentence(nb_words=4)
         body = fake.sentence(nb_words=10)
-        # REVISED: ใช้ rand_realistic_datetime
-        created_at = rand_realistic_datetime(120, 0)
+        
+        # FIX: เพิ่ม start_hour=6 และ end_hour=23 (ช่วงเวลาปกติที่ระบบส่งการแจ้งเตือน)
+        created_at = rand_realistic_datetime(120, 0, start_hour=6, end_hour=23)
+        
         is_read = 1 if random.random()>0.6 else 0
         cur.execute("""INSERT INTO notification(notification_id, user_id, device_id, notification_type, title, body, created_at, is_read)
                        VALUES(?,?,?,?,?,?,?,?)""",
-                    (nid, user_id, device_ref, ntype, title, body, created_at, is_read))
+                    (n_id, user_id, device_ref, ntype, title, body, created_at, is_read))
+        n_id += 1
 
     # 11) News
-    for nid in range(1, N_NEWS+1):
-        subj = f"News {nid}: {fake.word().capitalize()}"
+    news_id = 1
+    for _ in range(N_NEWS):
+        subj = f"News {news_id}: {fake.word().capitalize()}"
         des = fake.paragraph(nb_sentences=2)
-        # REVISED: start_dt ใช้ rand_realistic_datetime
-        start_dt = rand_realistic_datetime(300, 0)
+        
+        # FIX: เพิ่ม start_hour=8 และ end_hour=20 (เวลาทำการที่ข่าวถูกสร้าง/เผยแพร่)
+        start_dt = rand_realistic_datetime(300, 0, start_hour=8, end_hour=20)
+        
         end_dt = None
         created_by = random.choice(user_ids)
         cur.execute("""INSERT INTO news(news_id, news_subject, news_descrip, news_start_datetime, news_end_datetime, is_read, created_by_user_id)
                        VALUES(?,?,?,?,?,?,?)""",
-                    (nid, subj, des, start_dt, end_dt, 0, created_by))
+                    (news_id, subj, des, start_dt, end_dt, 0, created_by))
+        news_id += 1
 
     # 12) Achievements
     a_id = 1
@@ -601,15 +697,17 @@ def main():
         code = f"ACH{random.randint(1000,9999)}"
         name = random.choice(['First Run','Marathon','Century Ride','Early Riser','Consistency'])
         des = f"Awarded for {name.lower()}"
-        # REVISED: earned_at ใช้ rand_realistic_datetime
-        earned_at = rand_realistic_datetime(400, 0)
+        
+        # FIX: แก้ไขบรรทัดนี้ โดยเพิ่ม start_hour=6 และ end_hour=23 
+        # (กำหนดเวลาได้รับรางวัลให้อยู่ในช่วงที่ผู้ใช้ใช้งานระบบ)
+        earned_at = rand_realistic_datetime(400, 0, start_hour=6, end_hour=23)
+        
         try:
             cur.execute("""INSERT INTO achievements(achievement_id, user_id, a_code, a_name, a_descrip, earned_at)
                            VALUES(?,?,?,?,?,?)""", (a_id, user_id, code, name, des, earned_at))
             a_id += 1
         except sqlite3.IntegrityError:
-            # skip duplicate codes
-            pass
+            pass # skip duplicate codes
 
     # 13) Missions
     for mid in range(1, N_MISSIONS+1):
