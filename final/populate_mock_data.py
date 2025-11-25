@@ -539,7 +539,7 @@ def main():
         
         # 3. Realistic Timing: Occur between 8 AM - 8 PM (20:00)
         # Event span: random days between 200 days ago and 100 days from now
-        event_start_dt_str = rand_realistic_datetime(start_days_ago=200, end_days_ago=-100, start_hour=8, end_hour=20)
+        event_start_dt_str = rand_realistic_datetime(start_days_ago=200, end_days_ago=0, start_hour=8, end_hour=20)
         start_dt = datetime.fromisoformat(event_start_dt_str)
         end_dt = start_dt + timedelta(hours=random.randint(1, 6)) # Events last 1 to 6 hours
 
