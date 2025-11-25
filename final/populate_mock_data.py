@@ -27,6 +27,63 @@ N_USER_MISSIONS = 45000  # NEW: Target number of mission completion records (Max
 DB_PATH = "garmin_clone.db"
 # เพิ่มในส่วน Configuration ด้านบน (พร้อมกับ N_USERS, N_ACTIVITIES, ฯลฯ)
 DAYS_HISTORY = 30        # For biometrics: collect one record per user per day for this many days (Keep)
+N_REGIONS = 6            # N_REGIONS = 6 ภูมิภาคหลัก
+
+# 1. รายการจังหวัดของไทย 77 จังหวัด (พร้อมพิกัดตัวอย่าง) เรียงตามภูมิภาค
+# หมายเหตุ: นี่คือชุดข้อมูลที่กำหนดขึ้นเพื่อจำลองการเรียงตามภูมิศาสตร์ 
+# Location ID จะถูกกำหนดตามลำดับในลิสต์นี้
+THAI_CITIES_ORDERED = [
+    # ภาคกลาง (Central: Location ID 1-18) - 18 จังหวัด
+    ('Bangkok', 13.75, 100.5), ('Nonthaburi', 13.88, 100.52), ('Samut Prakan', 13.59, 100.59), 
+    ('Pathum Thani', 14.02, 100.53), ('Ayutthaya', 14.35, 100.57), ('Saraburi', 14.53, 100.91), 
+    ('Lopburi', 14.8, 100.67), ('Sing Buri', 14.88, 100.38), ('Ang Thong', 14.58, 100.47), 
+    ('Chai Nat', 15.18, 100.12), ('Nakhon Sawan', 15.79, 100.12), ('Phichit', 16.27, 100.35), 
+    ('Kamphaeng Phet', 16.48, 99.52), ('Uthai Thani', 15.38, 100.03), ('Suphan Buri', 14.47, 100.02), 
+    ('Nakhon Pathom', 13.82, 100.07), ('Samut Sakhon', 13.55, 100.27), ('Samut Songkhram', 13.4, 99.98),
+
+    # ภาคเหนือ (North: Location ID 19-33) - 15 จังหวัด
+    ('Chiang Mai', 18.78, 98.98), ('Chiang Rai', 19.9, 99.82), ('Lamphun', 18.57, 99.01), 
+    ('Lampang', 18.29, 99.5), ('Phrae', 18.15, 100.15), ('Nan', 18.78, 100.78), 
+    ('Phayao', 19.18, 99.88), ('Dara', 16.75, 99.28), ('Mae Hong Son', 19.3, 97.97), 
+    ('Sukhothai', 17.0, 99.82), ('Pitsanulok', 16.8, 100.25), ('Phetchabun', 16.15, 101.15), 
+    ('Utaradit', 17.62, 100.1), ('Tak', 16.87, 99.12), ('Nakhon Thai', 18.13, 100.12), 
+    
+    # ภาคใต้ (South: Location ID 34-45) - 12 จังหวัด
+    ('Phuket', 7.88, 98.39), ('Krabi', 8.08, 98.91), ('Songkhla', 7.2, 100.6), 
+    ('Surat Thani', 9.14, 99.33), ('Nakhon Si Thammarat', 8.44, 99.96), ('Trang', 7.55, 99.61), 
+    ('Phatthalung', 7.61, 100.07), ('Yala', 6.55, 101.27), ('Pattani', 6.87, 101.25), 
+    ('Narathiwat', 6.43, 101.83), ('Satun', 6.6, 100.0), ('Ranong', 9.97, 98.63), 
+
+    # ภาคตะวันออกเฉียงเหนือ (Northeast: Location ID 46-60) - 15 จังหวัด
+    ('Nakhon Ratchasima', 14.97, 102.08), ('Khon Kaen', 16.43, 102.83), ('Udon Thani', 17.38, 102.78), 
+    ('Ubon Ratchathani', 15.22, 104.87), ('Surin', 14.88, 103.5), ('Buriram', 15.1, 103.1), 
+    ('Si Sa Ket', 15.11, 104.31), ('Roi Et', 16.05, 103.65), ('Kalasin', 16.43, 103.5), 
+    ('Maha Sarakham', 16.18, 103.3), ('Yasothon', 15.82, 104.13), ('Mukdahan', 16.55, 104.7), 
+    ('Chaiyaphum', 15.8, 102.03), ('Amnat Charoen', 15.87, 105.0), ('Nong Khai', 17.88, 102.75), 
+    
+    # ภาคตะวันออก (East: Location ID 61-68) - 8 จังหวัด
+    ('Chonburi', 13.36, 100.98), ('Rayong', 12.67, 101.27), ('Chanthaburi', 12.61, 102.1), 
+    ('Trat', 12.23, 102.51), ('Sa Kaeo', 13.83, 102.0), ('Prachinburi', 14.07, 101.38), 
+    ('Chachoengsao', 13.6, 101.12), ('Nakhon Nayok', 14.2, 101.18),
+    
+    # ภาคตะวันตก (West: Location ID 69-77) - 9 จังหวัด (เพื่อรวมให้ครบ 77)
+    ('Kanchanaburi', 14.0, 99.5), ('Phetchaburi', 13.1, 99.94), ('Ratchaburi', 13.52, 99.82), 
+    ('Prachuap Khiri Khan', 11.83, 99.78), ('Tak (West)', 16.87, 99.12), ('Phetchabun (West)', 16.15, 101.15),
+    ('Loei', 17.48, 101.78), ('Nong Bua Lamphu', 17.2, 102.42), ('Bueng Kan', 18.36, 103.65),
+    
+    # รวม 18 + 15 + 12 + 15 + 8 + 9 = 77 Provinces
+]
+
+# กำหนดช่วง ID ของ Location ในแต่ละภูมิภาค
+# Region ID (1-6) จะอ้างอิงลำดับ ID ที่ใส่ในตาราง locations
+REGION_MAPPING = {
+    1: list(range(1, 19)),     # Region 1: ภาคกลาง (Central)
+    2: list(range(19, 34)),    # Region 2: ภาคเหนือ (North)
+    3: list(range(34, 46)),    # Region 3: ภาคใต้ (South)
+    4: list(range(46, 61)),    # Region 4: ภาคตะวันออกเฉียงเหนือ (Northeast)
+    5: list(range(61, 69)),    # Region 5: ภาคตะวันออก (East)
+    6: list(range(69, N_LOCATIONS + 1)) # Region 6: ภาคตะวันตก (West)
+}
 
 # List of tables to clear to ensure the script is idempotent (can be re-run)
 TABLES_TO_CLEAR = [
@@ -137,106 +194,14 @@ def main():
         cur.execute("INSERT INTO activity_types(activity_type_id,name) VALUES(?,?)", (i,a))
 
     # 2) Locations
-    # Data for Thai Provinces (Province Name, Latitude, Longitude) for realistic location generation
-# (Complete list of 77 provinces)
-    THAI_LOCATIONS = [
-    ("Bangkok", 13.7563, 100.5018), 
-    ("Amnat Charoen", 15.8647, 104.6293), 
-    ("Ang Thong", 14.5888, 100.3804), 
-    ("Bueng Kan", 18.3687, 103.6508), 
-    ("Buri Ram", 15.0062, 103.1091), 
-    ("Chachoengsao", 13.6888, 101.0716), 
-    ("Chai Nat", 15.1963, 100.1257), 
-    ("Chaiyaphum", 15.8166, 102.0493), 
-    ("Chanthaburi", 12.6074, 102.1158), 
-    ("Chiang Mai", 18.7061, 98.9950), 
-    ("Chiang Rai", 19.9079, 99.8325), 
-    ("Chonburi", 13.3602, 100.9840), 
-    ("Chumphon", 10.4623, 99.1557), 
-    ("Kalasin", 16.4485, 103.5262), 
-    ("Kamphaeng Phet", 16.4674, 99.5255), 
-    ("Kanchanaburi", 14.0076, 99.5165), 
-    ("Khon Kaen", 16.4444, 102.8354), 
-    ("Krabi", 8.0833, 98.9213), 
-    ("Lampang", 18.2936, 99.5085), 
-    ("Lamphun", 18.5861, 99.0061), 
-    ("Loei", 17.4725, 101.8398), 
-    ("Lopburi", 14.7997, 100.6720), 
-    ("Mae Hong Son", 19.3021, 97.9686), 
-    ("Maha Sarakham", 16.1950, 103.2423), 
-    ("Mukdahan", 16.5451, 104.6857), 
-    ("Nakhon Nayok", 14.2057, 101.2183), 
-    ("Nakhon Pathom", 13.8239, 100.0784), 
-    ("Nakhon Phanom", 17.4086, 104.7831), 
-    ("Nakhon Ratchasima", 14.9783, 102.0992), 
-    ("Nakhon Sawan", 15.6946, 100.1197), 
-    ("Nakhon Si Thammarat", 8.4208, 99.9692), 
-    ("Nan", 18.7779, 100.7712), 
-    ("Narathiwat", 6.4279, 101.8267), 
-    ("Nong Bua Lamphu", 17.2036, 102.4042), 
-    ("Nong Khai", 17.8761, 102.7562), 
-    ("Nonthaburi", 13.8856, 100.4682), 
-    ("Pathum Thani", 14.0205, 100.5244), 
-    ("Pattani", 6.8661, 101.2290), 
-    ("Phang Nga", 8.4485, 98.5297), 
-    ("Phatthalung", 7.6186, 100.0763), 
-    ("Phetchabun", 16.4257, 101.0772), 
-    ("Phetchaburi", 13.1118, 99.9329), 
-    ("Phichit", 16.2699, 100.3541), 
-    ("Phitsanulok", 16.8251, 100.2646), 
-    ("Phrae", 18.1469, 100.1472), 
-    ("Phra Nakhon Si Ayutthaya", 14.3508, 100.5684), 
-    ("Phuket", 7.8804, 98.3923), 
-    ("Prachinburi", 14.0494, 101.3854), 
-    ("Prachuap Khiri Khan", 11.8159, 99.7997), 
-    ("Ranong", 9.9602, 98.6366), 
-    ("Ratchaburi", 13.5358, 99.8174), 
-    ("Rayong", 12.6766, 101.2778), 
-    ("Roi Et", 16.0506, 103.6542), 
-    ("Sa Kaeo", 13.8441, 102.5020), 
-    ("Sakon Nakhon", 17.1558, 104.1481), 
-    ("Samut Prakan", 13.5997, 100.5985), 
-    ("Samut Sakhon", 13.5583, 100.2783), 
-    ("Samut Songkhram", 14.0531, 99.9536), 
-    ("Saraburi", 14.5165, 100.9168), 
-    ("Satun", 6.6111, 99.9829), 
-    ("Singburi", 14.8872, 100.3957), 
-    ("Sisaket", 15.1189, 104.1481), 
-    ("Songkhla", 7.1896, 100.5986), 
-    ("Sukhothai", 17.0094, 99.7842), 
-    ("Suphan Buri", 14.4754, 100.0818), 
-    ("Surat Thani", 9.1418, 99.3299), 
-    ("Surin", 14.8824, 103.4984), 
-    ("Tak", 16.8770, 99.1232), 
-    ("Trang", 7.5501, 99.6105), 
-    ("Trat", 12.2392, 102.5061), 
-    ("Ubon Ratchathani", 15.2285, 104.8576), 
-    ("Udon Thani", 17.3942, 102.7845), 
-    ("Uthai Thani", 15.3789, 100.0381), 
-    ("Uttaradit", 17.6256, 100.0886), 
-    ("Yala", 6.5510, 101.2721), 
-    ("Yasothon", 15.8118, 104.1542),
-    ("Phayao", 19.1918, 99.8973) 
-    ]
-    # NEW LOGIC: Use all 77 provinces of THAI_LOCATIONS exactly once.
+    
+    # REVISED: Insert 77 Thai provinces ordered by region for realistic grouping
     loc_id = 1
-    # วนลูปตามรายการจังหวัดโดยตรง
-    for province_data in THAI_LOCATIONS:
-        
-        city = province_data[0] # ชื่อจังหวัด (เช่น "Bangkok")
-        base_lat = province_data[1] 
-        base_lon = province_data[2]
-        
-        # 1. เพิ่มค่า Jitter (การสั่น) เล็กน้อยเพื่อจำลองตำแหน่งเฉพาะในจังหวัดนั้น
-        # Jitter +/- 0.1 องศา ประมาณ +/- 11 กิโลเมตร
-        lat = round(base_lat + random.uniform(-0.1, 0.1), 6) 
-        lon = round(base_lon + random.uniform(-0.1, 0.1), 6)
-        
-        # 2. INSERT
-        cur.execute("INSERT INTO locations(location_id,city,location_latitude,location_longitude) VALUES(?,?,?,?)",
-                    (loc_id, city, lat, lon))
-        
-        loc_id += 1 # เพิ่ม Location ID
+    for city_name, lat, lon in THAI_CITIES_ORDERED:
+        # ใช้ city_name จาก THAI_CITIES_ORDERED
+        cur.execute("INSERT INTO locations(location_id, city, location_latitude, location_longitude) VALUES(?,?,?,?)",
+                    (loc_id, city_name, lat, lon))
+        loc_id += 1
         
         # ถ้า N_LOCATIONS ถูกตั้งไว้น้อยกว่า 77 หรือต้องการหยุดที่จำนวนที่กำหนด
         if loc_id > N_LOCATIONS:
@@ -262,6 +227,18 @@ def main():
                        VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                     (uid, gender_id, first, last, username, email, phone, user_verify, registration_date, bday, is_active))
         user_ids.append(uid)
+
+    # -------------------------------------------------------------
+    # >>> NEW CODE START: สร้าง Base Location สำหรับ User <<<
+    # -------------------------------------------------------------
+    user_base_locations = {}
+    location_list = list(range(1, N_LOCATIONS + 1))
+    
+    for uid in user_ids:
+        # กำหนด Location ID (จังหวัด) แบบสุ่มให้เป็น Home Location ของ User นั้นๆ
+        user_base_locations[uid] = random.choice(location_list)
+    # -------------------------------------------------------------
+    # >>> NEW CODE END <<<
 
     # 4) Devices (some users have devices)
     
@@ -314,14 +291,60 @@ def main():
    # 5) Activities (ตรรกะเวลาสอดคล้องกับกิจกรรม ถูกกำหนดไว้เฉพาะแล้ว)
     activity_id = 1
     
+    # --------------------------------------------------------------------------------------
+    # >>> NEW: Setup Region Lookups (ต้องทำก่อนลูป Activities) <<<
+    # --------------------------------------------------------------------------------------
+    location_regions = {}
+    region_to_locations = {rid: [] for rid in REGION_MAPPING.keys()}
+
+    for rid, loc_id_list in REGION_MAPPING.items():
+        for loc_id in loc_id_list:
+            if loc_id <= N_LOCATIONS: 
+                location_regions[loc_id] = rid
+                region_to_locations[rid].append(loc_id)
+    # --------------------------------------------------------------------------------------
+
     # ใช้นโยบายการกำหนดค่าขอบเขตสูงสุดที่ปลอดภัยที่สุด
-    # max_device_id คือ ID อุปกรณ์ที่มีอยู่จริงสูงสุด (N_DEVICES)
     max_device_id_to_link = max(1, device_id - 1) 
     
     for _ in range(N_ACTIVITIES):
         user_id = random.choice(user_ids)
         activity_type_id = random.randint(1, len(activity_types)) # สุ่มจากประเภทกิจกรรม 1-10
-        loc_id = random.randint(1, N_LOCATIONS)
+
+        # --------------------------------------------------------------------------------------
+        # >>> REVISED: Logic การกำหนด location_id 70% Home / 20% Local / 10% Global (ตามภูมิศาสตร์) <<<
+        # --------------------------------------------------------------------------------------
+        
+        # 1. ดึง Base Location ของ User และ Region
+        base_loc_id = user_base_locations[user_id]
+        base_region_id = location_regions[base_loc_id] # ดึง Region ID ที่สร้างไว้
+
+        # 2. กำหนด Location ID ด้วยน้ำหนัก: 70% Home / 20% Local / 10% Global
+        rand_weight = random.random()
+        
+        if rand_weight < 0.7:
+            # 70% - Home Location (กิจกรรมส่วนใหญ่ในพื้นที่หลัก)
+            loc_id = base_loc_id
+        elif rand_weight < 0.9: # 0.7 + 0.2 = 0.9
+            # 20% - Local Travel (สุ่มใน Location ใน Region เดียวกัน)
+            current_region_locations = region_to_locations[base_region_id]
+            
+            # กรอง Home Location ออกจากการสุ่ม Local Travel
+            local_options = [lid for lid in current_region_locations if lid != base_loc_id]
+            
+            if local_options:
+                # สุ่มจากจังหวัดใกล้เคียง (ใน Region เดียวกัน)
+                loc_id = random.choice(local_options)
+            else:
+                # กรณีมี Location เดียวใน Region หรือเกิดข้อผิดพลาด ให้กลับไปใช้ Home
+                loc_id = base_loc_id
+        else:
+            # 10% - Global Travel (สุ่ม Location ID ทั่วประเทศ)
+            loc_id = random.randint(1, N_LOCATIONS)
+            
+        # --------------------------------------------------------------------------------------
+        # >>> สิ้นสุดการแก้ไข Location ID <<<
+
         device_ref = random.randint(1, max_device_id_to_link)
 
         # 1. กำหนดระยะเวลา (duration_min) ตาม Activity Type ให้เหมาะสม
@@ -346,8 +369,8 @@ def main():
 
         # 2. คำนวณ start_datetime และ end_datetime ที่สอดคล้องกับเวลาจริงของมนุษย์
         
-        # 2a. กำหนดวันที่ในอดีต (ไม่เกิน 720 วัน)
-        date_of_activity = datetime.utcnow().date() - timedelta(days=random.randint(0, 720))
+        # 2a. กำหนดวันที่ในอดีต (ไม่เกิน 365 วัน)
+        date_of_activity = datetime.utcnow().date() - timedelta(days=random.randint(0, 365))
         
         # 2b. กำหนดช่วงชั่วโมงที่เหมาะสม
         if activity_type_id in [1, 2, 3, 4, 5, 6]: # กิจกรรมกลางแจ้ง/น้ำ (Run, Walk, Cycle, Hike, Swim, Rowing)
