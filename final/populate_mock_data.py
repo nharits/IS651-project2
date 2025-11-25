@@ -208,7 +208,19 @@ def main():
             break
 
     # 3) Users
+    print(f"Populating {N_USERS} users (Weighted Age Distribution: 15-80)...")
     user_ids = []
+
+    # --- NEW LOGIC START: Weighted Age Distribution Setup ---
+    AGE_WEIGHTS = [
+        {'min_age': 25, 'max_age': 49, 'weight': 65},  # 65% Working Age (Highest)
+        {'min_age': 15, 'max_age': 24, 'weight': 25},  # 25% Young Adults/Teens
+        {'min_age': 50, 'max_age': 60, 'weight': 10},  # 10% Older Adults/Elderly (Lowest)
+    ]
+    AGE_RANGES = [item for item in AGE_WEIGHTS]
+    WEIGHTS = [item['weight'] for item in AGE_WEIGHTS]
+    # --- NEW LOGIC END ---
+
     for uid in range(1, N_USERS+1):
         gender_id = random.randint(1, len(genders))
         first = fake.first_name()
@@ -217,19 +229,33 @@ def main():
         email = username + "@example.com"
         phone = fake.msisdn()[:12]
         
-        # FIX: เพิ่ม start_hour=6 และ end_hour=23 เพื่อกำหนดช่วงเวลาลงทะเบียนให้สมจริง
-        registration_date = rand_realistic_datetime(800, 0, start_hour=6, end_hour=23)  # registered within last ~2 years
+        # Registration date: ใช้ logic เดิม (rand_realistic_datetime)
+        registration_date = rand_realistic_datetime(800, 0, start_hour=6, end_hour=23)
         
-        bday = fake.date_of_birth(minimum_age=18, maximum_age=70).isoformat()
+        # >>> REVISED BDAY GENERATION: ใช้ Weighted Random เพื่อเลือกช่วงอายุ <<<
+        
+        # 1. สุ่มเลือกช่วงอายุตามน้ำหนักที่กำหนด (65/25/10)
+        selected_range = random.choices(AGE_RANGES, weights=WEIGHTS, k=1)[0]
+        
+        # 2. Generate วันเกิด (bday) ภายในช่วงอายุที่สุ่มได้
+        min_age = selected_range['min_age']
+        max_age = selected_range['max_age']
+        
+        # ใช้ Faker generate bday ภายในช่วง min_age ถึง max_age
+        bday = fake.date_of_birth(minimum_age=min_age, maximum_age=max_age).isoformat()
+        
+        # <<< สิ้นสุดการแก้ไข BDAY >>>
+        
         is_active = 1 if random.random() > 0.05 else 0
         user_verify = 1 if random.random() > 0.2 else 0
+
         cur.execute("""INSERT INTO users(user_id, gender_id, first_name, last_name, username, email, phone_number, user_verify, registration_date, user_birthday, is_active)
                        VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                     (uid, gender_id, first, last, username, email, phone, user_verify, registration_date, bday, is_active))
         user_ids.append(uid)
 
     # -------------------------------------------------------------
-    # >>> NEW CODE START: สร้าง Base Location สำหรับ User <<<
+    # โค้ด Base Location ของผู้ใช้ (ต้องคงไว้เพื่อใช้ใน Activities)
     # -------------------------------------------------------------
     user_base_locations = {}
     location_list = list(range(1, N_LOCATIONS + 1))
@@ -238,7 +264,6 @@ def main():
         # กำหนด Location ID (จังหวัด) แบบสุ่มให้เป็น Home Location ของ User นั้นๆ
         user_base_locations[uid] = random.choice(location_list)
     # -------------------------------------------------------------
-    # >>> NEW CODE END <<<
 
     # 4) Devices (some users have devices)
     
