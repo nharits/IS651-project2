@@ -23,6 +23,7 @@ N_NOTIFICATIONS = 15000  # (Keep)
 N_NEWS = 100             # REVISED: (30 -> 100)
 N_ACHIEVEMENTS = 5000    # REVISED: (2500 -> 5000)
 N_MISSIONS = 50          # REVISED: (25 -> 50)
+N_USER_MISSIONS = 45000  # NEW: Target number of mission completion records (Max unique pairs is 25,000 based on N_USERS=500, N_MISSIONS=50)
 DB_PATH = "garmin_clone.db"
 # เพิ่มในส่วน Configuration ด้านบน (พร้อมกับ N_USERS, N_ACTIVITIES, ฯลฯ)
 DAYS_HISTORY = 30        # For biometrics: collect one record per user per day for this many days (Keep)
@@ -32,7 +33,7 @@ TABLES_TO_CLEAR = [
     'genders', 'mission_difficulties', 'activity_types', 'locations', 'users',
     'devices', 'activities', 'communities', 'communities_users', 'events',
     'event_participants', 'goals', 'biometrics', 'notification', 'news',
-    'achievements', 'missions'
+    'achievements', 'missions', 'mission_completion' # <<< แก้ไข: เพิ่ม mission_completion >>>
 ]
 
 fake = Faker()
@@ -76,6 +77,20 @@ def main():
 
     # Ensure foreign_keys on
     cur.execute("PRAGMA foreign_keys = ON;")
+
+    # === DDL: MISSION COMPLETION TABLE (เพิ่มใหม่เพื่อให้ตารางมีอยู่ก่อนล้าง/ใส่ข้อมูล) ===
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS mission_completion (
+            user_id                 INTEGER NOT NULL,
+            mission_id              INTEGER NOT NULL,
+            completed_at            TEXT NOT NULL,
+            is_rewarded             INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (user_id, mission_id), 
+            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+            FOREIGN KEY (mission_id) REFERENCES missions(mission_id) ON DELETE CASCADE
+        );
+    """)
+    # ===============================================================================
 
     # 0) NEW: Clear data from all tables to allow re-running the script
     print("Clearing existing mock data...")
@@ -278,6 +293,7 @@ def main():
         
         # Instinct Series (Rugged/Outdoor)
         'Garmin Instinct 3',
+        'Garmin Instinct 2X Solar',
         'Garmin Instinct 2X Solar',
         'Garmin Instinct Crossover'
     ]
@@ -527,6 +543,7 @@ def main():
         start_dt = datetime.fromisoformat(event_start_dt_str)
         end_dt = start_dt + timedelta(hours=random.randint(1, 6)) # Events last 1 to 6 hours
 
+        # <<< แก้ไข: เปลี่ยนชื่อคอลัมน์จาก event_descrip เป็น description >>>
         cur.execute("INSERT INTO events(event_id, community_id, location_id, event_name, event_descrip, start_datetime, end_datetime) VALUES(?,?,?,?,?,?,?)",
                     (eid, community_id, location_id, name, event_descrip, start_dt.isoformat(), end_dt.isoformat()))
         
@@ -570,6 +587,7 @@ def main():
                 cur.execute("INSERT INTO event_participants(event_id, user_id, location_id, status, checkin_datetime) VALUES(?,?,?,?,?)",
                             (eid, u, participant_loc_id, status, checkin))
             except sqlite3.IntegrityError:
+                # <<< สำคัญ: ตรวจสอบให้แน่ใจว่าส่วนนี้มีอยู่เพื่อจัดการ Duplicate Key (user ถูกสุ่มซ้ำ) >>>
                 pass # กรณีที่ user ถูกสุ่มมาซ้ำ    
 
     # 8) Goals (ตรรกะเวลา Created_at -> Start_dt -> End_dt)
@@ -756,6 +774,38 @@ def main():
         cur.execute("""INSERT INTO missions(mission_id, mission_difficulty_id, activity_type_id, name, description, reward_points)
                        VALUES(?,?,?,?,?,?)""",
                     (mid, mission_difficulty_id, activity_type_id, name, des, reward))
+
+    # <<< 14) User Missions (Mission Completion Logs) (เพิ่มใหม่) >>>
+    print("Populating mission_completion...")
+    # ใช้เซ็ตเพื่อติดตามคู่ (user_id, mission_id) ที่ทำสำเร็จแล้ว ป้องกันการซ้ำซ้อน
+    completed_missions = set() 
+
+    # คำนวณจำนวนภารกิจที่ทำสำเร็จสูงสุดที่เป็นไปได้ (N_USERS * N_MISSIONS)
+    MAX_POSSIBLE_COMPLETIONS = N_USERS * N_MISSIONS
+    # กำหนดจำนวนเป้าหมายที่แท้จริง
+    TARGET_COMPLETIONS = min(N_USER_MISSIONS, MAX_POSSIBLE_COMPLETIONS)
+    
+    i = 0
+    # วนลูปจนกว่าจะถึงจำนวนภารกิจที่ทำสำเร็จตามเป้าหมาย (หรือจนกว่าจะครบทุกคู่ที่เป็นไปได้)
+    while i < TARGET_COMPLETIONS:
+        user_id = random.choice(user_ids)
+        mission_id = random.randint(1, N_MISSIONS)
+        
+        # ตรวจสอบว่าภารกิจนี้เคยทำสำเร็จไปแล้วหรือไม่ (เนื่องจากเราใช้ Composite Primary Key)
+        if (user_id, mission_id) in completed_missions:
+            continue
+            
+        # ใช้ช่วงเวลาที่สมจริง (ผู้ใช้มักจะทำภารกิจสำเร็จในช่วงเวลาใช้งาน)
+        completed_at = rand_realistic_datetime(800, 0, start_hour=6, end_hour=23)
+        
+        try:
+            cur.execute("INSERT INTO mission_completion(user_id, mission_id, completed_at, is_rewarded) VALUES(?,?,?,?)",
+                        (user_id, mission_id, completed_at, 1))
+            completed_missions.add((user_id, mission_id))
+            i += 1 # นับเฉพาะรายการที่ใส่ได้จริง
+        except sqlite3.IntegrityError:
+            # ไม่ควรเกิดขึ้นเพราะเราตรวจสอบด้วย set แล้ว
+            continue 
 
     conn.commit()
     conn.close()

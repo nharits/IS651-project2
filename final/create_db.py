@@ -96,11 +96,18 @@ CREATE TABLE events (
 
 -- (new). ตาราง event_participants
 CREATE TABLE event_participants (
-    event_id INTEGER PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(user_id),
+    event_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
     location_id INTEGER REFERENCES locations(location_id), -- อนุญาตให้เป็น NULL สำหรับ Virtual Event
     status TEXT NOT NULL,
-    checkin_datetime TEXT NOT NULL -- ISO8601 Datetime
+    checkin_datetime TEXT, -- ISO8601 Datetime (ไม่จำเป็นต้อง NOT NULL เพราะถ้า status เป็น 'rsvp' จะไม่มี checkin time)
+    
+    -- กำหนด Primary Key ร่วม
+    PRIMARY KEY (event_id, user_id), 
+    
+    -- Foreign Keys
+    FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
 -- 10. ตาราง activities (บันทึกกิจกรรมออกกำลังกาย)
