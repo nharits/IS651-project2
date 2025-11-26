@@ -1,6 +1,12 @@
 # create_db.py
+"""
+Run this script to create the SQLite database file `garmin_clone.db`
+from the exact DDL provided by the user (no changes).
+Usage:
+    python create_db.py
+"""
 import sqlite3
-DB_PATH = "garmin_like_gemini.db"
+import pathlib
 
 DDL = """
 PRAGMA foreign_keys = ON;
@@ -90,11 +96,18 @@ CREATE TABLE events (
 
 -- (new). ตาราง event_participants
 CREATE TABLE event_participants (
-    event_id INTEGER PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(user_id),
+    event_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
     location_id INTEGER REFERENCES locations(location_id), -- อนุญาตให้เป็น NULL สำหรับ Virtual Event
     status TEXT NOT NULL,
-    checkin_datetime TEXT NOT NULL -- ISO8601 Datetime
+    checkin_datetime TEXT, -- ISO8601 Datetime (ไม่จำเป็นต้อง NOT NULL เพราะถ้า status เป็น 'rsvp' จะไม่มี checkin time)
+    
+    -- กำหนด Primary Key ร่วม
+    PRIMARY KEY (event_id, user_id), 
+    
+    -- Foreign Keys
+    FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
 -- 10. ตาราง activities (บันทึกกิจกรรมออกกำลังกาย)
@@ -103,7 +116,7 @@ CREATE TABLE activities (
     user_id INTEGER NOT NULL REFERENCES users(user_id),
     activity_type_id INTEGER NOT NULL REFERENCES activity_types(activity_type_id),
     location_id INTEGER REFERENCES locations(location_id),
-    device_id INTEGER REFERENCES devices(device_id),
+    device_id INTEGER NOT NULL REFERENCES devices(device_id),
     start_datetime TEXT NOT NULL, -- ISO8601 Datetime
     end_datetime TEXT NOT NULL, -- ISO8601 Datetime
     distance_km REAL, -- ใช้ REAL สำหรับทศนิยม
@@ -192,15 +205,38 @@ CREATE TABLE missions (
     description TEXT,
     reward_points INTEGER DEFAULT 0
 );
+
+-- 17. ตาราง mission_completion
+CREATE TABLE IF NOT EXISTS mission_completion (
+    user_id                 INTEGER NOT NULL,
+    mission_id              INTEGER NOT NULL,
+    completed_at            TEXT NOT NULL,
+    is_rewarded             INTEGER NOT NULL DEFAULT 1, -- 1=ได้รับรางวัลแล้ว, 0=อยู่ระหว่างการตรวจสอบ (ใช้ในกรณีที่ภารกิจมีเงื่อนไขซับซ้อน)
+    
+    -- กำหนด Primary Key เป็นคู่ user_id และ mission_id 
+    -- เพื่อให้ผู้ใช้ 1 คนทำภารกิจ 1 ชนิดสำเร็จได้แค่ 1 ครั้งเท่านั้น
+    PRIMARY KEY (user_id, mission_id), 
+    
+    -- Foreign Keys เพื่อเชื่อมโยงกับตารางหลัก
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (mission_id) REFERENCES missions(mission_id) ON DELETE CASCADE
+);
 """
 
-def create_db():
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.executescript(DDL)
-    conn.commit()
-    conn.close()
-    print("Database created at", DB_PATH)
+def main(db_path="garmin_clone.db"):
+    db_file = pathlib.Path(db_path)
+    if db_file.exists():
+        print(f"Overwriting existing DB: {db_file.resolve()}")
+        db_file.unlink()
+    conn = sqlite3.connect(db_path)
+    try:
+        cursor = conn.cursor()
+        # Execute DDL as a single script
+        cursor.executescript(DDL)
+        conn.commit()
+        print(f"Database created successfully at: {db_file.resolve()}")
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
-    create_db()
+    main()
